@@ -3,6 +3,13 @@ const prisma = require('../config/prisma');
 
 const SESSION_COLUMNS = ['sessionId1', 'sessionId2', 'sessionId3', 'sessionId4'];
 
+const serializeSessions = (device) => {
+  return SESSION_COLUMNS.map((column, index) => ({
+    slot: index + 1,
+    paired: Boolean(device[column])
+  }));
+};
+
 const upsertDevice = async ({ code, name }) => {
   return prisma.device.upsert({
     where: {
@@ -114,12 +121,43 @@ const removeSession = async (sessionId) => {
   });
 };
 
+const removeSessionSlot = async ({ code, slot }) => {
+  const index = Number(slot) - 1;
+  const sessionColumn = SESSION_COLUMNS[index];
+
+  if (!sessionColumn) {
+    return { error: 'Invalid session slot.' };
+  }
+
+  const device = await findByCode(code);
+
+  if (!device) {
+    return { error: 'Device not found.' };
+  }
+
+  const updatedDevice = await prisma.device.update({
+    where: {
+      code
+    },
+    data: {
+      [sessionColumn]: null
+    }
+  });
+
+  return {
+    device: updatedDevice,
+    sessions: serializeSessions(updatedDevice)
+  };
+};
+
 module.exports = {
+  serializeSessions,
   upsertDevice,
   updatePairingChallenge,
   findByCode,
   findBySessionId,
   createSession,
   markPing,
-  removeSession
+  removeSession,
+  removeSessionSlot
 };

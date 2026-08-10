@@ -228,10 +228,29 @@ const listMessages = async (req, res, next) => {
   }
 };
 
+const listMessageNotifications = async (req, res, next) => {
+  try {
+    const result = await messageModel.findMessagesSyncedAfter({
+      deviceCode: req.device.code,
+      after: req.query.after,
+      limit: req.query.limit
+    });
+
+    return res.json({
+      messages: result.messages.map(serializeMessage),
+      latestSyncedAt: result.latestSyncedAt ? result.latestSyncedAt.toISOString() : null
+    });
+  } catch (err) {
+    console.error('Failed to load message notifications:', err);
+    return next(err);
+  }
+};
+
 module.exports = {
   storeSms,
   storeSmsBatch,
   renderSmsFeed,
   listConversations,
-  listMessages
+  listMessages,
+  listMessageNotifications
 };

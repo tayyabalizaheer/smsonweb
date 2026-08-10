@@ -115,13 +115,20 @@ Production PWA installation requires HTTPS. On `https://sms.engrtayyabali.com/`,
 1. Open the Android app once. It creates a permanent 6 digit pairing code.
 2. Open the web app. If the browser is not paired, it redirects to `/pair`.
 3. Enter the 6 digit Android code.
-4. The backend generates three random verification numbers and shows them on the web.
+4. The backend generates three random verification numbers and shows them on the web for 30 seconds.
 5. Tap "Fetch Latest Pairing Number" in the Android app.
 6. The Android app shows only the correct verification number.
 7. Choose that number on the web.
 8. The backend saves a browser session in one of four device session columns: `session_id_1` through `session_id_4`.
 
-Each Android device can have up to four paired web sessions at the same time. Use "Unpair this browser" in the web app to free one session slot.
+Each Android device can have up to four paired web sessions at the same time. Use "Unpair this browser" in the web app to free the current session slot, or use the Android app's paired sessions list to unpair any occupied slot.
+
+Android pairing controls:
+
+- Tap "Pair New Web Device" to show the permanent 6 digit device code.
+- Tap "Fetch Latest Pairing Number" after entering the code on the web.
+- Use "Refresh Paired Sessions" to show the 4 web session slots.
+- Tap an occupied slot's unpair button to disconnect that web session.
 
 ## Device Health
 
@@ -138,6 +145,18 @@ GET /api/device/status
 ```
 
 and shows the paired device as offline if `last_ping_at` is older than 2 minutes.
+
+## Web Notifications
+
+The web PWA checks for newly synced SMS messages every 30 seconds while it is open. In Settings, click "Enable" next to Notifications to allow Windows/Android browser notifications.
+
+The polling endpoint is:
+
+```text
+GET /api/messages/notifications?after=<iso timestamp>
+```
+
+This is polling-based. Notifications while the PWA is fully closed require a Push API setup with push subscriptions and VAPID keys.
 
 ## API
 

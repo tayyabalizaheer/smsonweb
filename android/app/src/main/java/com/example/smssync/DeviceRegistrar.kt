@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
@@ -96,6 +97,78 @@ class DeviceRegistrar(private val context: Context) {
         })
     }
 
+    fun fetchSessionsAsync(onResult: (List<WebSessionSlot>?) -> Unit) {
+        val code = URLEncoder.encode(identity.getCode(), "UTF-8")
+        val request = Request.Builder()
+            .url("${BuildConfig.DEVICE_SESSIONS_API_URL}?code=$code")
+            .get()
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "Failed to fetch web sessions.", e)
+                onResult(null)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!it.isSuccessful) {
+                        Log.e(TAG, "Session fetch failed with HTTP ${it.code}: ${it.body?.string().orEmpty()}")
+                        onResult(null)
+                        return
+                    }
+
+                    val sessions = try {
+                        parseSessions(JSONObject(it.body?.string().orEmpty()).getJSONArray("sessions"))
+                    } catch (err: Exception) {
+                        null
+                    }
+
+                    onResult(sessions)
+                }
+            }
+        })
+    }
+
+    fun unpairSessionAsync(slot: Int, onResult: (Boolean) -> Unit) {
+        val payload = JSONObject()
+            .put("code", identity.getCode())
+            .put("slot", slot)
+            .toString()
+
+        val request = Request.Builder()
+            .url(BuildConfig.DEVICE_UNPAIR_SESSION_API_URL)
+            .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(TAG, "Failed to unpair web session.", e)
+                onResult(false)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    onResult(it.isSuccessful)
+                }
+            }
+        })
+    }
+
+    private fun parseSessions(items: JSONArray): List<WebSessionSlot> {
+        val sessions = mutableListOf<WebSessionSlot>()
+
+        for (index in 0 until items.length()) {
+            val item = items.getJSONObject(index)
+            sessions += WebSessionSlot(
+                slot = item.getInt("slot"),
+                paired = item.getBoolean("paired")
+            )
+        }
+
+        return sessions
+    }
+
     private fun buildRequest(): Request {
         val payload = JSONObject()
             .put("code", identity.getCode())
@@ -120,3 +193,8 @@ class DeviceRegistrar(private val context: Context) {
             .build()
     }
 }
+
+data class WebSessionSlot(
+    val slot: Int,
+    val paired: Boolean
+)

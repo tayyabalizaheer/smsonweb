@@ -1,9 +1,12 @@
-const CACHE_NAME = 'sms-sync-v5';
+const APP_VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const ASSET_VERSION = encodeURIComponent(APP_VERSION);
+const CACHE_NAME = `sms-sync-${APP_VERSION}`;
 const STATIC_ASSETS = [
   '/offline.html',
-  '/css/styles.css',
-  '/js/app.js',
-  '/manifest.webmanifest',
+  `/css/styles.css?v=${ASSET_VERSION}`,
+  `/js/app.js?v=${ASSET_VERSION}`,
+  `/js/pair.js?v=${ASSET_VERSION}`,
+  `/manifest.webmanifest?v=${ASSET_VERSION}`,
   '/icons/icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -73,6 +76,25 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         return response;
       });
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

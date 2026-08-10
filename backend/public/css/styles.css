@@ -83,6 +83,10 @@ p {
   justify-content: space-between;
 }
 
+.app-title {
+  min-width: 0;
+}
+
 .eyebrow {
   margin: 0 0 4px;
   color: var(--accent-strong);
@@ -93,55 +97,67 @@ p {
 }
 
 h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 0;
   font-size: 1.5rem;
   line-height: 1.1;
 }
 
-.sync-meta {
-  display: grid;
-  min-width: 74px;
-  justify-items: end;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.sync-meta strong {
+.settings-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
   color: var(--text);
+  cursor: pointer;
+  font: inherit;
   font-size: 1.1rem;
 }
 
-.device-code {
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
+.settings-button:hover,
+.settings-button.is-active {
+  background: #eef9f7;
+  color: var(--accent-strong);
 }
 
-.logout-form {
-  border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
-}
-
-.device-health {
+.settings-panel {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  align-items: center;
-  gap: 8px;
+  gap: 0;
   border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
+  background: var(--panel);
+  padding: 8px 16px 12px;
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding: 9px 0;
   color: var(--muted);
   font-size: 0.86rem;
 }
 
-.device-health strong {
+.settings-row strong,
+.settings-row time {
   color: var(--text);
+  font-weight: 800;
+  text-align: right;
 }
 
-.device-health small {
-  overflow: hidden;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.logout-form {
+  padding-top: 12px;
 }
 
 .status-dot {
@@ -162,9 +178,9 @@ h1 {
 }
 
 .logout-form button,
+.notification-button,
 .pair-form button,
-.pair-options button,
-.pair-secondary button {
+.pair-options button {
   min-height: 42px;
   border: 0;
   border-radius: 8px;
@@ -181,21 +197,11 @@ h1 {
   color: var(--accent-strong);
 }
 
-.last-sync {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.last-sync time,
-.last-sync strong {
-  color: var(--text);
-  font-weight: 700;
+.notification-button {
+  min-height: 34px;
+  padding: 0 12px;
+  background: #e3f5f2;
+  color: var(--accent-strong);
 }
 
 .conversation-list {
@@ -457,6 +463,19 @@ h1 {
   font-weight: 700;
 }
 
+.pair-timer {
+  border-radius: 8px;
+  background: #ecfdf5;
+  padding: 10px 12px;
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.pair-timer.is-expired {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .pair-form input {
   width: 100%;
   min-height: 54px;
@@ -496,6 +515,11 @@ h1 {
 .pair-options button {
   min-height: 58px;
   font-size: 1.25rem;
+}
+
+.pair-options button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .pair-secondary-link {
@@ -554,19 +578,8 @@ h1 {
     padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
   }
 
-  .last-sync {
+  .settings-panel {
     padding-inline: max(12px, env(safe-area-inset-left));
-    font-size: 0.82rem;
-  }
-
-  .device-health {
-    padding-inline: max(12px, env(safe-area-inset-left));
-    grid-template-columns: auto auto;
-  }
-
-  .device-health small {
-    grid-column: 1 / -1;
-    text-align: left;
   }
 
   .conversation-list {
@@ -637,11 +650,6 @@ h1 {
 
   h1 {
     font-size: 1.25rem;
-  }
-
-  .sync-meta {
-    min-width: 58px;
-    font-size: 0.72rem;
   }
 
   .thread-header h2 {

@@ -221,9 +221,46 @@ const findMessagesByAddress = async ({ address, deviceCode, limit = 100, beforeM
   };
 };
 
+const findMessagesSyncedAfter = async ({ deviceCode, after, limit = 10 }) => {
+  const afterDate = after ? new Date(after) : null;
+  const take = Math.min(Math.max(Number(limit) || 10, 1), 25);
+  const where = {
+    ...(deviceCode ? { deviceCode } : {})
+  };
+
+  if (afterDate && !Number.isNaN(afterDate.getTime())) {
+    where.syncedAt = {
+      gt: afterDate
+    };
+  }
+
+  const [messages, latest] = await Promise.all([
+    prisma.message.findMany({
+      where,
+      orderBy: [
+        { syncedAt: 'desc' },
+        { id: 'desc' }
+      ],
+      take
+    }),
+    prisma.message.aggregate({
+      where: deviceCode ? { deviceCode } : {},
+      _max: {
+        syncedAt: true
+      }
+    })
+  ]);
+
+  return {
+    messages: messages.reverse(),
+    latestSyncedAt: latest._max.syncedAt
+  };
+};
+
 module.exports = {
   createMessage,
   createMessages,
   findConversationSummaries,
-  findMessagesByAddress
+  findMessagesByAddress,
+  findMessagesSyncedAfter
 };

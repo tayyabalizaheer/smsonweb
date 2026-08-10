@@ -4,6 +4,7 @@ const express = require('express');
 const helmet = require('helmet');
 const path = require('path');
 
+const { appVersion } = require('./config/version');
 const apiRoutes = require('./routes/api');
 const webRoutes = require('./routes/web');
 
@@ -27,6 +28,10 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '128kb' }));
 app.use(express.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  res.locals.appVersion = appVersion;
+  next();
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api', apiRoutes);

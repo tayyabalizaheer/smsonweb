@@ -19,6 +19,8 @@ android {
         buildConfigField "String", "DEVICE_REGISTER_API_URL", "\"https://sms.engrtayyabali.com/api/devices/register\""
         buildConfigField "String", "DEVICE_PAIRING_CHALLENGE_API_URL", "\"https://sms.engrtayyabali.com/api/devices/pairing-challenge\""
         buildConfigField "String", "DEVICE_HEALTH_API_URL", "\"https://sms.engrtayyabali.com/api/devices/health\""
+        buildConfigField "String", "DEVICE_SESSIONS_API_URL", "\"https://sms.engrtayyabali.com/api/devices/sessions\""
+        buildConfigField "String", "DEVICE_UNPAIR_SESSION_API_URL", "\"https://sms.engrtayyabali.com/api/devices/sessions/unpair\""
     }
 
     buildFeatures {

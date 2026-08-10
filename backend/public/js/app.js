@@ -5,6 +5,13 @@
   var header = null;
   var links = [];
   var backButton = null;
+  var settingsButton = null;
+  var settingsPanel = null;
+  var notificationButton = null;
+  var updateButton = null;
+  var updateStatus = null;
+  var availableVersion = '';
+  var latestNotificationSync = '';
   var currentAddress = '';
   var currentConversation = null;
   var nextCursor = null;
@@ -17,9 +24,21 @@
       return;
     }
 
-    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+    var version = shell?.dataset.appVersion || 'dev';
+
+    navigator.serviceWorker.register('/sw.js?v=' + encodeURIComponent(version)).catch(function (err) {
       console.error('Service worker registration failed:', err);
     });
+  }
+
+  function getCurrentVersion() {
+    return shell?.dataset.appVersion || 'unknown';
+  }
+
+  function getNotificationStorageKey() {
+    var deviceCode = shell?.dataset.deviceCode || 'default';
+
+    return 'sms-sync-latest-notification-sync:' + deviceCode;
   }
 
   function escapeHtml(value) {
@@ -337,20 +356,22 @@
   }
 
   function updateDeviceStatus(status) {
-    var dot = document.querySelector('.status-dot');
+    var dots = Array.prototype.slice.call(document.querySelectorAll('.status-dot'));
     var label = document.querySelector('[data-device-status]');
     var lastPing = document.querySelector('[data-device-last-ping]');
 
-    if (!dot || !label || !lastPing || !status) {
+    if (!dots.length || !label || !lastPing || !status) {
       return;
     }
 
-    dot.classList.toggle('is-online', Boolean(status.online));
-    dot.classList.toggle('is-offline', !status.online);
+    dots.forEach(function (dot) {
+      dot.classList.toggle('is-online', Boolean(status.online));
+      dot.classList.toggle('is-offline', !status.online);
+    });
     label.textContent = status.online ? 'Online' : 'Offline';
     lastPing.textContent = status.lastPingAt
-      ? 'Last ping ' + new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(status.lastPingAt))
-      : 'No health ping yet';
+      ? new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(status.lastPingAt))
+      : 'Never';
   }
 
   function fetchDeviceStatus() {
@@ -382,12 +403,258 @@
     window.setInterval(fetchDeviceStatus, 30000);
   }
 
+  function updateNotificationButton() {
+    if (!notificationButton || !('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      notificationButton.textContent = 'Enabled';
+      notificationButton.disabled = true;
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      notificationButton.textContent = 'Blocked';
+      notificationButton.disabled = true;
+      return;
+    }
+
+    notificationButton.textContent = 'Enable';
+    notificationButton.disabled = false;
+  }
+
+  function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      return;
+    }
+
+    Notification.requestPermission().then(updateNotificationButton);
+  }
+
+  function getMessageTitle(message, count) {
+    if (count > 1) {
+      return count + ' new SMS messages';
+    }
+
+    return 'New SMS from ' + (message.contactName || message.address || 'Unknown');
+  }
+
+  function showMessageNotification(messages) {
+    if (!messages.length || !('Notification' in window) || Notification.permission !== 'granted') {
+      return;
+    }
+
+    var latest = messages[messages.length - 1];
+    var title = getMessageTitle(latest, messages.length);
+    var body = messages.length > 1 ? latest.body : latest.body;
+    var url = latest.address ? '/?address=' + encodeURIComponent(latest.address) : '/';
+    var options = {
+      body: body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/maskable-512.png',
+      tag: latest.address || 'sms-sync-message',
+      renotify: true,
+      data: {
+        url: url
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then(function (registration) {
+          registration.showNotification(title, options);
+        })
+        .catch(function () {
+          new Notification(title, options);
+        });
+      return;
+    }
+
+    new Notification(title, options);
+  }
+
+  function fetchMessageNotifications() {
+    if (!latestNotificationSync) {
+      latestNotificationSync = shell?.dataset.latestSync || new Date().toISOString();
+      window.localStorage.setItem(getNotificationStorageKey(), latestNotificationSync);
+      return;
+    }
+
+    var params = new URLSearchParams({
+      after: latestNotificationSync,
+      limit: '10'
+    });
+
+    fetch('/api/messages/notifications?' + params.toString(), {
+      headers: {
+        Accept: 'application/json'
+      }
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Notification ping failed');
+        }
+
+        return response.json();
+      })
+      .then(function (data) {
+        var messages = data.messages || [];
+
+        if (messages.length) {
+          showMessageNotification(messages);
+        }
+
+        if (data.latestSyncedAt) {
+          latestNotificationSync = data.latestSyncedAt;
+          window.localStorage.setItem(getNotificationStorageKey(), latestNotificationSync);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function setupMessageNotificationPolling() {
+    latestNotificationSync = window.localStorage.getItem(getNotificationStorageKey()) || shell?.dataset.latestSync || new Date().toISOString();
+    window.localStorage.setItem(getNotificationStorageKey(), latestNotificationSync);
+
+    if (notificationButton) {
+      updateNotificationButton();
+      notificationButton.addEventListener('click', requestNotificationPermission);
+    }
+
+    window.setInterval(fetchMessageNotifications, 30000);
+  }
+
+  function setupSettingsPanel() {
+    if (!settingsButton || !settingsPanel) {
+      return;
+    }
+
+    settingsButton.addEventListener('click', function () {
+      var isOpen = !settingsPanel.hidden;
+
+      settingsPanel.hidden = isOpen;
+      settingsButton.classList.toggle('is-active', !isOpen);
+      settingsButton.setAttribute('aria-expanded', String(!isOpen));
+    });
+  }
+
+  function setUpdateUi(message, buttonText, disabled) {
+    if (updateStatus) {
+      updateStatus.textContent = message;
+    }
+
+    if (updateButton) {
+      updateButton.textContent = buttonText;
+      updateButton.disabled = Boolean(disabled);
+    }
+  }
+
+  function clearAppCaches() {
+    if (!('caches' in window)) {
+      return Promise.resolve();
+    }
+
+    return caches.keys().then(function (keys) {
+      return Promise.all(keys
+        .filter(function (key) {
+          return key.indexOf('sms-sync-') === 0;
+        })
+        .map(function (key) {
+          return caches.delete(key);
+        }));
+    });
+  }
+
+  function applyAppUpdate() {
+    setUpdateUi('Updating...', 'Updating', true);
+
+    Promise.resolve()
+      .then(function () {
+        return clearAppCaches();
+      })
+      .then(function () {
+        if (!('serviceWorker' in navigator)) {
+          return null;
+        }
+
+        return navigator.serviceWorker.getRegistration().then(function (registration) {
+          return registration ? registration.update() : null;
+        });
+      })
+      .catch(function () {})
+      .finally(function () {
+        window.location.replace('/?updated=' + Date.now());
+      });
+  }
+
+  function checkForAppUpdate() {
+    if (!updateButton) {
+      return;
+    }
+
+    var currentVersion = getCurrentVersion();
+
+    setUpdateUi('Checking...', 'Checking', true);
+
+    fetch('/api/version?ts=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json'
+      }
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Version check failed');
+        }
+
+        return response.json();
+      })
+      .then(function (data) {
+        availableVersion = data.version || '';
+
+        if (availableVersion && availableVersion !== currentVersion) {
+          setUpdateUi('Update available v' + availableVersion, 'Update', false);
+          return;
+        }
+
+        setUpdateUi('Current v' + currentVersion, 'Check', false);
+      })
+      .catch(function () {
+        setUpdateUi('Could not check', 'Retry', false);
+      });
+  }
+
+  function setupAppUpdateCheck() {
+    if (!updateButton) {
+      return;
+    }
+
+    setUpdateUi('Current v' + getCurrentVersion(), 'Check', false);
+
+    updateButton.addEventListener('click', function () {
+      if (availableVersion && availableVersion !== getCurrentVersion()) {
+        applyAppUpdate();
+        return;
+      }
+
+      checkForAppUpdate();
+    });
+
+    checkForAppUpdate();
+  }
+
   window.addEventListener('load', function () {
     shell = document.querySelector('.messenger-shell');
     thread = document.querySelector('.message-thread');
     header = document.querySelector('.thread-header');
     links = Array.prototype.slice.call(document.querySelectorAll('.conversation-link'));
     backButton = document.querySelector('.thread-back');
+    settingsButton = document.querySelector('.settings-button');
+    settingsPanel = document.querySelector('.settings-panel');
+    notificationButton = document.querySelector('[data-notification-button]');
+    updateButton = document.querySelector('[data-update-button]');
+    updateStatus = document.querySelector('[data-update-status]');
 
     registerServiceWorker();
 
@@ -397,8 +664,11 @@
 
     setupConversationLinks();
     setupBackButton();
+    setupSettingsPanel();
     setupInfiniteScroll();
     setupHistory();
     setupDeviceStatusPolling();
+    setupMessageNotificationPolling();
+    setupAppUpdateCheck();
   });
 })();

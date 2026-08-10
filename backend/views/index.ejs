@@ -9,54 +9,83 @@
     <meta name="apple-mobile-web-app-title" content="SMS Sync">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title><%= title %></title>
-    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="manifest" href="/manifest.webmanifest?v=<%= encodeURIComponent(appVersion) %>">
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/styles.css?v=<%= encodeURIComponent(appVersion) %>">
   </head>
   <body>
-    <main class="messenger-shell" data-thread-address="">
+    <main
+      class="messenger-shell"
+      data-thread-address=""
+      data-device-code="<%= device.code %>"
+      data-app-version="<%= appVersion %>"
+      data-latest-sync="<%= lastSyncedAt ? new Date(lastSyncedAt).toISOString() : '' %>">
       <aside class="conversation-panel" aria-label="Conversations">
         <header class="app-header">
-          <div>
+          <div class="app-title">
             <p class="eyebrow">SMS Sync</p>
-            <h1>Messages</h1>
-            <p class="device-code">Device <strong><%= device.code %></strong></p>
+            <h1>
+              <span class="status-dot <%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'is-online' : 'is-offline' %>" aria-hidden="true"></span>
+              <span>Messages</span>
+            </h1>
           </div>
-          <div class="sync-meta">
-            <strong><%= totalMessages %></strong>
-            <span>messages</span>
-          </div>
+          <button class="settings-button" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settingsPanel">
+            <span aria-hidden="true">&#9881;</span>
+          </button>
         </header>
 
-        <section class="device-health" aria-label="Device status">
-          <span class="status-dot <%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'is-online' : 'is-offline' %>"></span>
-          <strong data-device-status><%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'Online' : 'Offline' %></strong>
-          <small data-device-last-ping>
-            <% if (device.lastPingAt) { %>
-              Last ping <%= new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(device.lastPingAt)) %>
+        <section class="settings-panel" id="settingsPanel" hidden>
+          <div class="settings-row">
+            <span>Device</span>
+            <strong><%= device.code %></strong>
+          </div>
+          <div class="settings-row">
+            <span>Status</span>
+            <strong data-device-status><%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'Online' : 'Offline' %></strong>
+          </div>
+          <div class="settings-row">
+            <span>Last ping</span>
+            <strong data-device-last-ping>
+              <% if (device.lastPingAt) { %>
+                <%= new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(device.lastPingAt)) %>
+              <% } else { %>
+                Never
+              <% } %>
+            </strong>
+          </div>
+          <div class="settings-row">
+            <span>Messages</span>
+            <strong><%= totalMessages %></strong>
+          </div>
+          <div class="settings-row">
+            <span>Last sync</span>
+            <% if (lastSyncedAt) { %>
+              <time datetime="<%= new Date(lastSyncedAt).toISOString() %>">
+                <%= new Intl.DateTimeFormat('en', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short'
+                }).format(new Date(lastSyncedAt)) %>
+              </time>
             <% } else { %>
-              No health ping yet
+              <strong>Never</strong>
             <% } %>
-          </small>
-        </section>
-
-        <form class="logout-form" action="/logout" method="post">
-          <button type="submit">Unpair this browser</button>
-        </form>
-
-        <section class="last-sync" aria-label="Last sync">
-          <span>Last sync</span>
-          <% if (lastSyncedAt) { %>
-            <time datetime="<%= new Date(lastSyncedAt).toISOString() %>">
-              <%= new Intl.DateTimeFormat('en', {
-                dateStyle: 'medium',
-                timeStyle: 'short'
-              }).format(new Date(lastSyncedAt)) %>
-            </time>
-          <% } else { %>
-            <strong>Never</strong>
-          <% } %>
+          </div>
+          <div class="settings-row">
+            <span>Notifications</span>
+            <button class="notification-button" type="button" data-notification-button>Enable</button>
+          </div>
+          <div class="settings-row">
+            <span>App version</span>
+            <strong data-update-status>v<%= appVersion %></strong>
+          </div>
+          <div class="settings-row">
+            <span>Update</span>
+            <button class="notification-button" type="button" data-update-button>Check</button>
+          </div>
+          <form class="logout-form" action="/logout" method="post">
+            <button type="submit">Unpair this browser</button>
+          </form>
         </section>
 
         <% if (conversations.length === 0) { %>
@@ -115,6 +144,6 @@
         </div>
       </section>
     </main>
-    <script src="/js/app.js" defer></script>
+    <script src="/js/app.js?v=<%= encodeURIComponent(appVersion) %>" defer></script>
   </body>
 </html>

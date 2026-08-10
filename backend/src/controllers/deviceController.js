@@ -3,6 +3,7 @@ const deviceModel = require('../models/deviceModel');
 const SESSION_COOKIE = 'sms_session';
 const CODE_PATTERN = /^\d{6}$/;
 const OFFLINE_AFTER_MS = 2 * 60 * 1000;
+const PAIRING_EXPIRES_MS = 30 * 1000;
 
 const parseCookies = (cookieHeader = '') => {
   return cookieHeader.split(';').reduce((cookies, part) => {
@@ -59,6 +60,20 @@ const isDeviceOnline = (device) => {
   }
 
   return Date.now() - new Date(device.lastPingAt).getTime() <= OFFLINE_AFTER_MS;
+};
+
+const getPairingExpiresAt = (device) => {
+  if (!device?.pairingUpdatedAt) {
+    return null;
+  }
+
+  return new Date(new Date(device.pairingUpdatedAt).getTime() + PAIRING_EXPIRES_MS);
+};
+
+const isPairingActive = (device) => {
+  const expiresAt = getPairingExpiresAt(device);
+
+  return Boolean(device?.pairingAnswer && expiresAt && Date.now() <= expiresAt.getTime());
 };
 
 const serializeDeviceStatus = (device) => {
@@ -169,6 +184,7 @@ const submitPairCode = async (req, res, next) => {
       stage: 'verify',
       code,
       device: updatedDevice,
+      expiresAt: getPairingExpiresAt(updatedDevice),
       error: null
     });
   } catch (err) {
@@ -183,13 +199,16 @@ const verifyPairChoice = async (req, res, next) => {
   try {
     const device = await deviceModel.findByCode(code);
 
-    if (!device || choice !== device.pairingAnswer) {
+    if (!device || !isPairingActive(device) || choice !== device.pairingAnswer) {
       return res.status(400).render('pair', {
         title: 'Pair Device',
         stage: device ? 'verify' : 'code',
         code,
         device,
-        error: 'That number did not match the Android app. Try again.'
+        expiresAt: device ? getPairingExpiresAt(device) : null,
+        error: !device || isPairingActive(device)
+          ? 'That number did not match the Android app. Try again.'
+          : 'The verification numbers expired. Enter the 6 digit code again.'
       });
     }
 
@@ -201,6 +220,7 @@ const verifyPairChoice = async (req, res, next) => {
         stage: 'verify',
         code,
         device,
+        expiresAt: getPairingExpiresAt(device),
         error: result.error
       });
     }
@@ -238,8 +258,9 @@ const getPairingChallenge = async (req, res, next) => {
 
     return res.json({
       code: device.code,
-      answer: device.pairingAnswer,
-      pairingUpdatedAt: device.pairingUpdatedAt ? device.pairingUpdatedAt.toISOString() : null
+      answer: isPairingActive(device) ? device.pairingAnswer : null,
+      pairingUpdatedAt: device.pairingUpdatedAt ? device.pairingUpdatedAt.toISOString() : null,
+      expiresAt: getPairingExpiresAt(device)?.toISOString() || null
     });
   } catch (err) {
     console.error('Failed to get pairing challenge:', err);
@@ -275,15 +296,67 @@ const webDeviceStatus = async (req, res) => {
   });
 };
 
+const listSessions = async (req, res, next) => {
+  const code = typeof req.query?.code === 'string' ? req.query.code.trim() : '';
+
+  if (!CODE_PATTERN.test(code)) {
+    return res.status(400).json({ error: 'code must be a 6 digit number.' });
+  }
+
+  try {
+    const device = await deviceModel.findByCode(code);
+
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found.' });
+    }
+
+    return res.json({
+      code: device.code,
+      sessions: deviceModel.serializeSessions(device)
+    });
+  } catch (err) {
+    console.error('Failed to list device sessions:', err);
+    return next(err);
+  }
+};
+
+const unpairSessionSlot = async (req, res, next) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const slot = Number(req.body?.slot);
+
+  if (!CODE_PATTERN.test(code)) {
+    return res.status(400).json({ error: 'code must be a 6 digit number.' });
+  }
+
+  try {
+    const result = await deviceModel.removeSessionSlot({ code, slot });
+
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    return res.json({
+      unpaired: true,
+      sessions: result.sessions
+    });
+  } catch (err) {
+    console.error('Failed to unpair session slot:', err);
+    return next(err);
+  }
+};
+
 module.exports = {
   SESSION_COOKIE,
   OFFLINE_AFTER_MS,
+  PAIRING_EXPIRES_MS,
   getSessionId,
   requireWebDevice,
   registerDevice,
   getPairingChallenge,
   healthPing,
   webDeviceStatus,
+  listSessions,
+  unpairSessionSlot,
   renderPairStart,
   submitPairCode,
   verifyPairChoice,
