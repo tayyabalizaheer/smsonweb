@@ -21,12 +21,17 @@
           <div>
             <p class="eyebrow">SMS Sync</p>
             <h1>Messages</h1>
+            <p class="device-code">Device <strong><%= device.code %></strong></p>
           </div>
           <div class="sync-meta">
             <strong><%= totalMessages %></strong>
             <span>messages</span>
           </div>
         </header>
+
+        <form class="logout-form" action="/logout" method="post">
+          <button type="submit">Unpair this browser</button>
+        </form>
 
         <section class="last-sync" aria-label="Last sync">
           <span>Last sync</span>

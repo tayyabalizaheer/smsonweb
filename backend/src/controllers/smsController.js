@@ -51,6 +51,7 @@ const normalizeSmsPayload = (payload) => {
     : null;
   const rawMessageAt = payload.messageAt || payload.receivedAt || payload.timestamp;
   const messageAt = rawMessageAt ? new Date(rawMessageAt) : new Date();
+  const deviceCode = typeof payload.deviceCode === 'string' ? payload.deviceCode.trim() : null;
 
   if (!address) {
     return { error: 'address is required.' };
@@ -91,6 +92,7 @@ const normalizeSmsPayload = (payload) => {
   return {
     value: {
       deviceMessageId,
+      deviceCode,
       address,
       contactName,
       contactEmail,
@@ -124,6 +126,7 @@ const storeSms = async (req, res, next) => {
 
 const storeSmsBatch = async (req, res, next) => {
   const messages = Array.isArray(req.body?.messages) ? req.body.messages : null;
+  const deviceCode = typeof req.body?.deviceCode === 'string' ? req.body.deviceCode.trim() : null;
 
   if (!messages) {
     return res.status(400).json({ error: 'messages must be an array.' });
@@ -136,7 +139,10 @@ const storeSmsBatch = async (req, res, next) => {
   const normalized = [];
 
   for (const [index, message] of messages.entries()) {
-    const { value, error } = normalizeSmsPayload(message || {});
+    const { value, error } = normalizeSmsPayload({
+      ...(message || {}),
+      deviceCode: message?.deviceCode || deviceCode
+    });
 
     if (error) {
       return res.status(400).json({ error: `messages[${index}]: ${error}` });
@@ -161,10 +167,13 @@ const storeSmsBatch = async (req, res, next) => {
 
 const renderSmsFeed = async (req, res, next) => {
   try {
-    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries();
+    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries({
+      deviceCode: req.device.code
+    });
 
     return res.render('index', {
       title: 'SMS Messenger',
+      device: req.device,
       conversations,
       totalMessages,
       lastSyncedAt
@@ -177,7 +186,9 @@ const renderSmsFeed = async (req, res, next) => {
 
 const listConversations = async (req, res, next) => {
   try {
-    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries();
+    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries({
+      deviceCode: req.device.code
+    });
 
     return res.json({
       conversations: conversations.map(serializeConversation),
@@ -200,6 +211,7 @@ const listMessages = async (req, res, next) => {
   try {
     const result = await messageModel.findMessagesByAddress({
       address,
+      deviceCode: req.device.code,
       limit: req.query.limit,
       beforeMessageAt: req.query.beforeMessageAt,
       beforeId: req.query.beforeId

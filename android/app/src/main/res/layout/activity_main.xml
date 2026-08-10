@@ -28,6 +28,33 @@
         android:textSize="16sp" />
 
     <TextView
+        android:id="@+id/pairingCodeText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:textColor="@color/text_primary"
+        android:textSize="26sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/pairingOptionsText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="16sp" />
+
+    <Button
+        android:id="@+id/refreshPairingButton"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="16dp"
+        android:text="@string/refresh_pairing" />
+
+    <TextView
         android:id="@+id/endpointText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

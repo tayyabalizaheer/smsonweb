@@ -7,6 +7,7 @@ const createMessage = async (message) => {
         deviceMessageId: message.deviceMessageId
       },
       update: {
+        deviceCode: message.deviceCode,
         address: message.address,
         contactName: message.contactName,
         contactEmail: message.contactEmail,
@@ -20,6 +21,7 @@ const createMessage = async (message) => {
 
   return prisma.message.create({
     data: {
+      deviceCode: message.deviceCode,
       address: message.address,
       contactName: message.contactName,
       contactEmail: message.contactEmail,
@@ -35,22 +37,48 @@ const createMessages = async (messages) => {
     return { count: 0 };
   }
 
-  return prisma.message.createMany({
-    data: messages,
-    skipDuplicates: true
+  const operations = messages.map((message) => {
+    if (message.deviceMessageId) {
+      return prisma.message.upsert({
+        where: {
+          deviceMessageId: message.deviceMessageId
+        },
+        update: {
+          deviceCode: message.deviceCode,
+          address: message.address,
+          contactName: message.contactName,
+          contactEmail: message.contactEmail,
+          direction: message.direction,
+          body: message.body,
+          messageAt: message.messageAt
+        },
+        create: message
+      });
+    }
+
+    return prisma.message.create({
+      data: message
+    });
   });
+
+  await prisma.$transaction(operations);
+
+  return { count: messages.length };
 };
 
-const findConversationSummaries = async () => {
+const findConversationSummaries = async ({ deviceCode } = {}) => {
+  const where = deviceCode ? { deviceCode } : {};
   const [totalMessages, lastSync, groupedConversations, groupedDirections] = await Promise.all([
-    prisma.message.count(),
+    prisma.message.count({ where }),
     prisma.message.aggregate({
+      where,
       _max: {
         syncedAt: true
       }
     }),
     prisma.message.groupBy({
       by: ['address'],
+      where,
       _count: {
         _all: true
       },
@@ -60,6 +88,7 @@ const findConversationSummaries = async () => {
     }),
     prisma.message.groupBy({
       by: ['address', 'direction'],
+      where,
       _count: {
         _all: true
       }
@@ -83,7 +112,8 @@ const findConversationSummaries = async () => {
   const conversations = await Promise.all(groupedConversations.map(async (conversation) => {
     const latestMessage = await prisma.message.findFirst({
       where: {
-        address: conversation.address
+        address: conversation.address,
+        ...(deviceCode ? { deviceCode } : {})
       },
       orderBy: [
         { messageAt: 'desc' },
@@ -114,10 +144,11 @@ const findConversationSummaries = async () => {
   };
 };
 
-const findMessagesByAddress = async ({ address, limit = 100, beforeMessageAt, beforeId }) => {
+const findMessagesByAddress = async ({ address, deviceCode, limit = 100, beforeMessageAt, beforeId }) => {
   const take = Math.min(Math.max(Number(limit) || 100, 1), 100);
   const where = {
-    address
+    address,
+    ...(deviceCode ? { deviceCode } : {})
   };
 
   if (beforeMessageAt && beforeId) {

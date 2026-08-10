@@ -10,6 +10,7 @@ datasource db {
 model Message {
   id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   deviceMessageId String?  @unique(map: "messages_device_message_id_key") @map("device_message_id") @db.VarChar(128)
+  deviceCode      String?  @map("device_code") @db.VarChar(6)
   address         String   @map("sender") @db.VarChar(64)
   contactName     String?  @map("contact_name") @db.VarChar(160)
   contactEmail    String?  @map("contact_email") @db.VarChar(254)
@@ -22,5 +23,23 @@ model Message {
   @@index([syncedAt], map: "idx_messages_received_at")
   @@index([address], map: "idx_messages_sender")
   @@index([direction], map: "messages_direction_idx")
+  @@index([deviceCode], map: "messages_device_code_idx")
   @@map("messages")
+}
+
+model Device {
+  id               BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  code             String   @unique @db.VarChar(6)
+  name             String?  @db.VarChar(120)
+  pairingOptions   Json?    @map("pairing_options")
+  pairingAnswer    String?  @map("pairing_answer") @db.VarChar(8)
+  pairingUpdatedAt DateTime @default(now()) @map("pairing_updated_at") @db.Timestamp(0)
+  sessionId1       String?  @unique @map("session_id_1") @db.VarChar(64)
+  sessionId2       String?  @unique @map("session_id_2") @db.VarChar(64)
+  sessionId3       String?  @unique @map("session_id_3") @db.VarChar(64)
+  sessionId4       String?  @unique @map("session_id_4") @db.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@map("devices")
 }

@@ -10,19 +10,34 @@ import android.widget.TextView
 class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var endpointText: TextView
+    private lateinit var pairingCodeText: TextView
+    private lateinit var pairingOptionsText: TextView
+    private lateinit var refreshPairingButton: Button
     private lateinit var permissionButton: Button
+    private lateinit var identity: DeviceIdentity
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        identity = DeviceIdentity(this)
         statusText = findViewById(R.id.statusText)
         endpointText = findViewById(R.id.endpointText)
+        pairingCodeText = findViewById(R.id.pairingCodeText)
+        pairingOptionsText = findViewById(R.id.pairingOptionsText)
+        refreshPairingButton = findViewById(R.id.refreshPairingButton)
         permissionButton = findViewById(R.id.permissionButton)
 
         endpointText.text = getString(R.string.endpoint_label, BuildConfig.SMS_API_URL)
+        renderPairingChallenge()
+        DeviceRegistrar(this).registerAsync()
         permissionButton.setOnClickListener {
             requestSmsPermissionsOrSync()
+        }
+        refreshPairingButton.setOnClickListener {
+            identity.refreshPairingChallenge()
+            renderPairingChallenge()
+            DeviceRegistrar(this).registerAsync()
         }
 
         updatePermissionState()
@@ -81,6 +96,17 @@ class MainActivity : Activity() {
     private fun hasSmsPermissions(): Boolean {
         return checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
             checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun renderPairingChallenge() {
+        val challenge = identity.getPairingChallenge()
+
+        pairingCodeText.text = getString(R.string.pairing_code_label, identity.getCode())
+        pairingOptionsText.text = getString(
+            R.string.pairing_options_label,
+            challenge.options.joinToString(separator = "   "),
+            challenge.answer
+        )
     }
 
     companion object {

@@ -7,6 +7,7 @@ Lightweight one-way SMS synchronization:
 - The client posts batches to `POST /api/sms/bulk` and keeps `POST /api/sms` compatible for single-message posts.
 - Node.js, Express, EJS, Prisma ORM, and MySQL store and display a messenger-style SMS view.
 - The web dashboard is responsive and installable as a Progressive Web App.
+- The web dashboard requires pairing with the Android app by 6 digit code and a three-number verification challenge.
 
 ## Project Layout
 
@@ -107,6 +108,17 @@ The backend serves PWA assets from `public/`:
 - Apple touch icon for iOS home-screen install
 
 Production PWA installation requires HTTPS. On `https://sms.engrtayyabali.com/`, open the site in Chrome, Edge, or a mobile browser and use the browser's install/add-to-home-screen option.
+
+## Pairing Flow
+
+1. Open the Android app once. It creates a permanent 6 digit pairing code.
+2. The Android app displays three verification numbers and marks the one to choose.
+3. Open the web app. If the browser is not paired, it redirects to `/pair`.
+4. Enter the 6 digit Android code.
+5. Choose the verification number shown in the Android app.
+6. The backend saves a browser session in one of four device session columns: `session_id_1` through `session_id_4`.
+
+Each Android device can have up to four paired web sessions at the same time. Use "Unpair this browser" in the web app to free one session slot.
 
 ## API
 

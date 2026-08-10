@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f8f7f">
+    <title><%= title %></title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+    <main class="pair-shell">
+      <section class="pair-card">
+        <p class="eyebrow">SMS Sync</p>
+        <h1>Pair Device</h1>
+
+        <% if (error) { %>
+          <p class="pair-error"><%= error %></p>
+        <% } %>
+
+        <% if (stage === 'code') { %>
+          <form action="/pair/code" method="post" class="pair-form">
+            <label for="code">Android pairing code</label>
+            <input
+              id="code"
+              name="code"
+              value="<%= code %>"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              autocomplete="one-time-code"
+              required>
+            <button type="submit">Continue</button>
+          </form>
+        <% } else { %>
+          <div class="pair-device">
+            <span class="avatar large" aria-hidden="true"><%= (device.name || device.code).slice(0, 1).toUpperCase() %></span>
+            <div>
+              <h2><%= device.name || 'Android Device' %></h2>
+              <p>Code <strong><%= code %></strong></p>
+            </div>
+          </div>
+
+          <p class="pair-help">Choose the number marked in the Android app.</p>
+
+          <form action="/pair/verify" method="post" class="pair-options">
+            <input type="hidden" name="code" value="<%= code %>">
+            <% device.pairingOptions.forEach((option) => { %>
+              <button type="submit" name="choice" value="<%= option %>"><%= option %></button>
+            <% }) %>
+          </form>
+
+          <a class="pair-secondary-link" href="/pair">Use a different code</a>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

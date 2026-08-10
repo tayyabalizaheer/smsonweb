@@ -19,11 +19,12 @@ class SmsSyncWorker(
         }
 
         return try {
+            DeviceRegistrar(applicationContext).registerBlocking()
             val messages = SmsStore(applicationContext).readInboxAndSent()
             var uploaded = 0
 
             messages.chunked(BATCH_SIZE).forEach { batch ->
-                uploaded += SmsForwarder().forwardBatch(batch)
+                uploaded += SmsForwarder(applicationContext).forwardBatch(batch)
             }
 
             Log.d(TAG, "SMS sync completed. Submitted $uploaded messages.")

@@ -9,13 +9,14 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class SmsForwarder {
+class SmsForwarder(private val context: android.content.Context) {
     @Throws(IOException::class)
     fun forwardBatch(messages: List<SmsRecord>): Int {
         if (messages.isEmpty()) {
             return 0
         }
 
+        val deviceCode = DeviceIdentity(context.applicationContext).getCode()
         val payloadMessages = JSONArray()
 
         messages.forEach { message ->
@@ -32,6 +33,7 @@ class SmsForwarder {
         }
 
         val payload = JSONObject()
+            .put("deviceCode", deviceCode)
             .put("messages", payloadMessages)
             .toString()
 
