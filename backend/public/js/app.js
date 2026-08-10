@@ -7,6 +7,7 @@
   var backButton = null;
   var settingsButton = null;
   var settingsPanel = null;
+  var settingsPreviousFocus = null;
   var notificationButton = null;
   var updateButton = null;
   var updateStatus = null;
@@ -530,12 +531,46 @@
       return;
     }
 
-    settingsButton.addEventListener('click', function () {
-      var isOpen = !settingsPanel.hidden;
+    function closeSettings() {
+      settingsPanel.hidden = true;
+      settingsButton.classList.remove('is-active');
+      settingsButton.setAttribute('aria-expanded', 'false');
 
-      settingsPanel.hidden = isOpen;
-      settingsButton.classList.toggle('is-active', !isOpen);
-      settingsButton.setAttribute('aria-expanded', String(!isOpen));
+      if (settingsPreviousFocus && typeof settingsPreviousFocus.focus === 'function') {
+        settingsPreviousFocus.focus();
+      }
+    }
+
+    function openSettings() {
+      settingsPreviousFocus = document.activeElement;
+      settingsPanel.hidden = false;
+      settingsButton.classList.add('is-active');
+      settingsButton.setAttribute('aria-expanded', 'true');
+
+      var focusTarget = settingsPanel.querySelector('.settings-card');
+
+      if (focusTarget) {
+        focusTarget.focus();
+      }
+    }
+
+    settingsButton.addEventListener('click', function () {
+      if (settingsPanel.hidden) {
+        openSettings();
+        return;
+      }
+
+      closeSettings();
+    });
+
+    Array.prototype.slice.call(settingsPanel.querySelectorAll('[data-settings-close]')).forEach(function (control) {
+      control.addEventListener('click', closeSettings);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !settingsPanel.hidden) {
+        closeSettings();
+      }
     });
   }
 
