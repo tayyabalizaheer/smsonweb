@@ -4,26 +4,28 @@ Lightweight one-way SMS synchronization:
 
 - Android 10+ Kotlin client listens for incoming SMS messages.
 - The client asynchronously posts `{ sender, body }` to `POST /api/sms`.
-- Node.js, Express, EJS, and MySQL store and display the synced SMS feed.
+- Node.js, Express, EJS, Prisma ORM, and MySQL store and display the synced SMS feed.
 
 ## Project Layout
 
 ```text
 .
 +-- android/   # Android Kotlin client
-`-- backend/   # Node.js + Express + EJS + MySQL server
+`-- backend/   # Node.js + Express + EJS + Prisma + MySQL server
 ```
 
 Backend layout:
 
 ```text
 backend/
++-- prisma/schema.prisma
 +-- public/css/styles.css
-+-- schema.sql
 +-- src/
 |   +-- app.js
 |   +-- server.js
-|   +-- config/db.js
+|   +-- config/prisma.js
+|   +-- controllers/smsController.js
+|   +-- models/messageModel.js
 |   `-- routes/
 |       +-- api.js
 |       `-- web.js
@@ -40,17 +42,17 @@ Run these commands from `backend/`.
    npm install
    ```
 
-2. Create the database and table:
+2. Create the MySQL database:
 
-   ```bash
-   mysql -u root -p < schema.sql
+   ```sql
+   CREATE DATABASE sms_sync CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
 
 3. Create a MySQL user if needed:
 
    ```sql
    CREATE USER 'sms_sync_user'@'localhost' IDENTIFIED BY 'change_me';
-   GRANT SELECT, INSERT ON sms_sync.* TO 'sms_sync_user'@'localhost';
+   GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON sms_sync.* TO 'sms_sync_user'@'localhost';
    FLUSH PRIVILEGES;
    ```
 
@@ -60,13 +62,25 @@ Run these commands from `backend/`.
    cp .env.example .env
    ```
 
-5. Start the server:
+5. Generate the Prisma client and create the table:
+
+   ```bash
+   npm run prisma:migrate -- --name init
+   ```
+
+   For production deployments, run:
+
+   ```bash
+   npm run prisma:deploy
+   ```
+
+6. Start the server:
 
    ```bash
    npm start
    ```
 
-6. Open the feed:
+7. Open the feed:
 
    ```text
    http://localhost:3000

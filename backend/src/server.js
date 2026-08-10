@@ -1,5 +1,5 @@
 const app = require('./app');
-const pool = require('./config/db');
+const prisma = require('./config/prisma');
 
 const port = Number(process.env.PORT || 3000);
 
@@ -12,11 +12,11 @@ const shutdown = async (signal) => {
 
   server.close(async () => {
     try {
-      await pool.end();
-      console.log('MySQL pool closed.');
+      await prisma.$disconnect();
+      console.log('Prisma client disconnected.');
       process.exit(0);
     } catch (err) {
-      console.error('Failed to close MySQL pool:', err);
+      console.error('Failed to disconnect Prisma client:', err);
       process.exit(1);
     }
   });

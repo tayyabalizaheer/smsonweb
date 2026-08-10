@@ -27,11 +27,11 @@
             <article class="message-item">
               <div class="message-meta">
                 <strong><%= message.sender %></strong>
-                <time datetime="<%= new Date(message.received_at).toISOString() %>">
+                <time datetime="<%= new Date(message.receivedAt).toISOString() %>">
                   <%= new Intl.DateTimeFormat('en', {
                     dateStyle: 'medium',
                     timeStyle: 'short'
-                  }).format(new Date(message.received_at)) %>
+                  }).format(new Date(message.receivedAt)) %>
                 </time>
               </div>
               <p><%= message.body %></p>

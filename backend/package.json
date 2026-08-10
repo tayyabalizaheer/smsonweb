@@ -1,12 +1,15 @@
 {
   "name": "sms-one-way-sync",
   "version": "1.0.0",
-  "description": "Lightweight one-way SMS synchronization backend using Node.js, Express, EJS, and MySQL.",
+  "description": "Lightweight one-way SMS synchronization backend using Node.js, Express, EJS, Prisma, and MySQL.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/db.js && node --check src/routes/api.js && node --check src/routes/web.js"
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/prisma.js && node --check src/models/messageModel.js && node --check src/controllers/smsController.js && node --check src/routes/api.js && node --check src/routes/web.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "keywords": [
     "sms",
@@ -20,9 +23,10 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
+    "@prisma/client": "^6.14.0",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
-    "mysql2": "^3.11.5"
+    "prisma": "^6.14.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
