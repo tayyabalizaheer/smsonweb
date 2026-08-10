@@ -336,6 +336,52 @@
     });
   }
 
+  function updateDeviceStatus(status) {
+    var dot = document.querySelector('.status-dot');
+    var label = document.querySelector('[data-device-status]');
+    var lastPing = document.querySelector('[data-device-last-ping]');
+
+    if (!dot || !label || !lastPing || !status) {
+      return;
+    }
+
+    dot.classList.toggle('is-online', Boolean(status.online));
+    dot.classList.toggle('is-offline', !status.online);
+    label.textContent = status.online ? 'Online' : 'Offline';
+    lastPing.textContent = status.lastPingAt
+      ? 'Last ping ' + new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(status.lastPingAt))
+      : 'No health ping yet';
+  }
+
+  function fetchDeviceStatus() {
+    fetch('/api/device/status', {
+      headers: {
+        Accept: 'application/json'
+      }
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Status request failed');
+        }
+
+        return response.json();
+      })
+      .then(function (data) {
+        updateDeviceStatus(data.device);
+      })
+      .catch(function () {
+        updateDeviceStatus({
+          online: false,
+          lastPingAt: null
+        });
+      });
+  }
+
+  function setupDeviceStatusPolling() {
+    fetchDeviceStatus();
+    window.setInterval(fetchDeviceStatus, 30000);
+  }
+
   window.addEventListener('load', function () {
     shell = document.querySelector('.messenger-shell');
     thread = document.querySelector('.message-thread');
@@ -353,5 +399,6 @@
     setupBackButton();
     setupInfiniteScroll();
     setupHistory();
+    setupDeviceStatusPolling();
   });
 })();

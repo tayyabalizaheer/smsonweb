@@ -9,7 +9,7 @@ datasource db {
 
 model Message {
   id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  deviceMessageId String?  @unique(map: "messages_device_message_id_key") @map("device_message_id") @db.VarChar(128)
+  deviceMessageId String?  @map("device_message_id") @db.VarChar(128)
   deviceCode      String?  @map("device_code") @db.VarChar(6)
   address         String   @map("sender") @db.VarChar(64)
   contactName     String?  @map("contact_name") @db.VarChar(160)
@@ -24,6 +24,7 @@ model Message {
   @@index([address], map: "idx_messages_sender")
   @@index([direction], map: "messages_direction_idx")
   @@index([deviceCode], map: "messages_device_code_idx")
+  @@unique([deviceCode, deviceMessageId], map: "messages_device_code_device_message_id_key")
   @@map("messages")
 }
 
@@ -34,6 +35,7 @@ model Device {
   pairingOptions   Json?    @map("pairing_options")
   pairingAnswer    String?  @map("pairing_answer") @db.VarChar(8)
   pairingUpdatedAt DateTime @default(now()) @map("pairing_updated_at") @db.Timestamp(0)
+  lastPingAt       DateTime? @map("last_ping_at") @db.Timestamp(0)
   sessionId1       String?  @unique @map("session_id_1") @db.VarChar(64)
   sessionId2       String?  @unique @map("session_id_2") @db.VarChar(64)
   sessionId3       String?  @unique @map("session_id_3") @db.VarChar(64)

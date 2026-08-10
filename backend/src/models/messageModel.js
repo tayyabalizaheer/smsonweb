@@ -1,11 +1,24 @@
 const prisma = require('../config/prisma');
 
+const getUniqueMessageWhere = (message) => {
+  if (!message.deviceCode || !message.deviceMessageId) {
+    return null;
+  }
+
+  return {
+    deviceCode_deviceMessageId: {
+      deviceCode: message.deviceCode,
+      deviceMessageId: message.deviceMessageId
+    }
+  };
+};
+
 const createMessage = async (message) => {
-  if (message.deviceMessageId) {
+  const uniqueWhere = getUniqueMessageWhere(message);
+
+  if (uniqueWhere) {
     return prisma.message.upsert({
-      where: {
-        deviceMessageId: message.deviceMessageId
-      },
+      where: uniqueWhere,
       update: {
         deviceCode: message.deviceCode,
         address: message.address,
@@ -37,12 +50,21 @@ const createMessages = async (messages) => {
     return { count: 0 };
   }
 
-  const operations = messages.map((message) => {
-    if (message.deviceMessageId) {
+  const dedupedMessages = Array.from(messages.reduce((map, message) => {
+    const key = message.deviceCode && message.deviceMessageId
+      ? `${message.deviceCode}:${message.deviceMessageId}`
+      : `${message.address}:${message.direction}:${message.messageAt.toISOString()}:${message.body}`;
+
+    map.set(key, message);
+    return map;
+  }, new Map()).values());
+
+  const operations = dedupedMessages.map((message) => {
+    const uniqueWhere = getUniqueMessageWhere(message);
+
+    if (uniqueWhere) {
       return prisma.message.upsert({
-        where: {
-          deviceMessageId: message.deviceMessageId
-        },
+        where: uniqueWhere,
         update: {
           deviceCode: message.deviceCode,
           address: message.address,
@@ -63,7 +85,7 @@ const createMessages = async (messages) => {
 
   await prisma.$transaction(operations);
 
-  return { count: messages.length };
+  return { count: dedupedMessages.length };
 };
 
 const findConversationSummaries = async ({ deviceCode } = {}) => {

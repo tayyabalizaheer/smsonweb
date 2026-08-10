@@ -2,7 +2,7 @@ const deviceModel = require('../models/deviceModel');
 
 const SESSION_COOKIE = 'sms_session';
 const CODE_PATTERN = /^\d{6}$/;
-const OPTION_PATTERN = /^\d{3}$/;
+const OFFLINE_AFTER_MS = 2 * 60 * 1000;
 
 const parseCookies = (cookieHeader = '') => {
   return cookieHeader.split(';').reduce((cookies, part) => {
@@ -37,22 +37,37 @@ const clearSessionCookie = (res) => {
   );
 };
 
-const normalizeOptions = (options) => {
-  if (!Array.isArray(options) || options.length !== 3) {
-    return null;
+const generatePairingChallenge = () => {
+  const options = new Set();
+
+  while (options.size < 3) {
+    options.add(String(Math.floor(Math.random() * 900) + 100));
   }
 
-  const normalized = options.map((option) => String(option).trim());
+  const pairingOptions = Array.from(options).sort();
+  const pairingAnswer = pairingOptions[Math.floor(Math.random() * pairingOptions.length)];
 
-  if (!normalized.every((option) => OPTION_PATTERN.test(option))) {
-    return null;
+  return {
+    pairingOptions,
+    pairingAnswer
+  };
+};
+
+const isDeviceOnline = (device) => {
+  if (!device?.lastPingAt) {
+    return false;
   }
 
-  if (new Set(normalized).size !== normalized.length) {
-    return null;
-  }
+  return Date.now() - new Date(device.lastPingAt).getTime() <= OFFLINE_AFTER_MS;
+};
 
-  return normalized;
+const serializeDeviceStatus = (device) => {
+  return {
+    code: device.code,
+    name: device.name,
+    online: isDeviceOnline(device),
+    lastPingAt: device.lastPingAt ? device.lastPingAt.toISOString() : null
+  };
 };
 
 const requireWebDevice = async (req, res, next) => {
@@ -61,7 +76,7 @@ const requireWebDevice = async (req, res, next) => {
     const device = await deviceModel.findBySessionId(sessionId);
 
     if (!device) {
-      if (req.path.startsWith('/api/')) {
+      if (req.originalUrl.startsWith('/api/')) {
         return res.status(401).json({ error: 'Pair this browser with an Android device first.' });
       }
 
@@ -78,29 +93,15 @@ const requireWebDevice = async (req, res, next) => {
 const registerDevice = async (req, res, next) => {
   const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
   const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : null;
-  const pairingOptions = normalizeOptions(req.body?.pairingOptions);
-  const pairingAnswer = typeof req.body?.pairingAnswer === 'string'
-    ? req.body.pairingAnswer.trim()
-    : '';
 
   if (!CODE_PATTERN.test(code)) {
     return res.status(400).json({ error: 'code must be a 6 digit number.' });
   }
 
-  if (!pairingOptions) {
-    return res.status(400).json({ error: 'pairingOptions must contain 3 unique three digit numbers.' });
-  }
-
-  if (!pairingOptions.includes(pairingAnswer)) {
-    return res.status(400).json({ error: 'pairingAnswer must be one of the pairingOptions.' });
-  }
-
   try {
     await deviceModel.upsertDevice({
       code,
-      name,
-      pairingOptions,
-      pairingAnswer
+      name
     });
 
     return res.json({ registered: true });
@@ -146,7 +147,7 @@ const submitPairCode = async (req, res, next) => {
   try {
     const device = await deviceModel.findByCode(code);
 
-    if (!device || !Array.isArray(device.pairingOptions)) {
+    if (!device) {
       return res.status(404).render('pair', {
         title: 'Pair Device',
         stage: 'code',
@@ -156,11 +157,18 @@ const submitPairCode = async (req, res, next) => {
       });
     }
 
+    const challenge = generatePairingChallenge();
+    const updatedDevice = await deviceModel.updatePairingChallenge({
+      code,
+      pairingOptions: challenge.pairingOptions,
+      pairingAnswer: challenge.pairingAnswer
+    });
+
     return res.render('pair', {
       title: 'Pair Device',
       stage: 'verify',
       code,
-      device,
+      device: updatedDevice,
       error: null
     });
   } catch (err) {
@@ -214,11 +222,68 @@ const logout = async (req, res, next) => {
   }
 };
 
+const getPairingChallenge = async (req, res, next) => {
+  const code = typeof req.query?.code === 'string' ? req.query.code.trim() : '';
+
+  if (!CODE_PATTERN.test(code)) {
+    return res.status(400).json({ error: 'code must be a 6 digit number.' });
+  }
+
+  try {
+    const device = await deviceModel.findByCode(code);
+
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found.' });
+    }
+
+    return res.json({
+      code: device.code,
+      answer: device.pairingAnswer,
+      pairingUpdatedAt: device.pairingUpdatedAt ? device.pairingUpdatedAt.toISOString() : null
+    });
+  } catch (err) {
+    console.error('Failed to get pairing challenge:', err);
+    return next(err);
+  }
+};
+
+const healthPing = async (req, res, next) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : null;
+
+  if (!CODE_PATTERN.test(code)) {
+    return res.status(400).json({ error: 'code must be a 6 digit number.' });
+  }
+
+  try {
+    await deviceModel.upsertDevice({ code, name });
+    const device = await deviceModel.markPing(code);
+
+    return res.json({
+      ok: true,
+      device: serializeDeviceStatus(device)
+    });
+  } catch (err) {
+    console.error('Failed to update device health:', err);
+    return next(err);
+  }
+};
+
+const webDeviceStatus = async (req, res) => {
+  return res.json({
+    device: serializeDeviceStatus(req.device)
+  });
+};
+
 module.exports = {
   SESSION_COOKIE,
+  OFFLINE_AFTER_MS,
   getSessionId,
   requireWebDevice,
   registerDevice,
+  getPairingChallenge,
+  healthPing,
+  webDeviceStatus,
   renderPairStart,
   submitPairCode,
   verifyPairChoice,

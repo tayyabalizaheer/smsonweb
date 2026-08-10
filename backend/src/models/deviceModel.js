@@ -3,20 +3,27 @@ const prisma = require('../config/prisma');
 
 const SESSION_COLUMNS = ['sessionId1', 'sessionId2', 'sessionId3', 'sessionId4'];
 
-const upsertDevice = async ({ code, name, pairingOptions, pairingAnswer }) => {
+const upsertDevice = async ({ code, name }) => {
   return prisma.device.upsert({
     where: {
       code
     },
     update: {
-      name,
-      pairingOptions,
-      pairingAnswer,
-      pairingUpdatedAt: new Date()
+      name
     },
     create: {
       code,
-      name,
+      name
+    }
+  });
+};
+
+const updatePairingChallenge = async ({ code, pairingOptions, pairingAnswer }) => {
+  return prisma.device.update({
+    where: {
+      code
+    },
+    data: {
       pairingOptions,
       pairingAnswer,
       pairingUpdatedAt: new Date()
@@ -73,6 +80,17 @@ const createSession = async (code) => {
   };
 };
 
+const markPing = async (code) => {
+  return prisma.device.update({
+    where: {
+      code
+    },
+    data: {
+      lastPingAt: new Date()
+    }
+  });
+};
+
 const removeSession = async (sessionId) => {
   const device = await findBySessionId(sessionId);
 
@@ -98,8 +116,10 @@ const removeSession = async (sessionId) => {
 
 module.exports = {
   upsertDevice,
+  updatePairingChallenge,
   findByCode,
   findBySessionId,
   createSession,
+  markPing,
   removeSession
 };

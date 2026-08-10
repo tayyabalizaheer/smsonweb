@@ -122,6 +122,45 @@ h1 {
   padding: 10px 16px;
 }
 
+.device-health {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.device-health strong {
+  color: var(--text);
+}
+
+.device-health small {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-dot.is-online {
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.15);
+}
+
+.status-dot.is-offline {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+}
+
 .logout-form button,
 .pair-form button,
 .pair-options button,
@@ -518,6 +557,16 @@ h1 {
   .last-sync {
     padding-inline: max(12px, env(safe-area-inset-left));
     font-size: 0.82rem;
+  }
+
+  .device-health {
+    padding-inline: max(12px, env(safe-area-inset-left));
+    grid-template-columns: auto auto;
+  }
+
+  .device-health small {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
   .conversation-list {

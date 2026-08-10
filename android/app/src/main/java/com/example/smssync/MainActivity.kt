@@ -2,7 +2,9 @@ package com.example.smssync
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
@@ -29,15 +31,15 @@ class MainActivity : Activity() {
         permissionButton = findViewById(R.id.permissionButton)
 
         endpointText.text = getString(R.string.endpoint_label, BuildConfig.SMS_API_URL)
-        renderPairingChallenge()
+        renderPairingCode()
         DeviceRegistrar(this).registerAsync()
+        startDeviceHealthService()
         permissionButton.setOnClickListener {
             requestSmsPermissionsOrSync()
         }
         refreshPairingButton.setOnClickListener {
-            identity.refreshPairingChallenge()
-            renderPairingChallenge()
             DeviceRegistrar(this).registerAsync()
+            fetchLatestPairingAnswer()
         }
 
         updatePermissionState()
@@ -98,15 +100,32 @@ class MainActivity : Activity() {
             checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun renderPairingChallenge() {
-        val challenge = identity.getPairingChallenge()
-
+    private fun renderPairingCode() {
         pairingCodeText.text = getString(R.string.pairing_code_label, identity.getCode())
-        pairingOptionsText.text = getString(
-            R.string.pairing_options_label,
-            challenge.options.joinToString(separator = "   "),
-            challenge.answer
-        )
+        pairingOptionsText.text = getString(R.string.pairing_answer_waiting)
+    }
+
+    private fun fetchLatestPairingAnswer() {
+        pairingOptionsText.text = getString(R.string.pairing_answer_loading)
+        DeviceRegistrar(this).fetchPairingAnswerAsync { answer ->
+            runOnUiThread {
+                pairingOptionsText.text = if (answer.isNullOrBlank()) {
+                    getString(R.string.pairing_answer_unavailable)
+                } else {
+                    getString(R.string.pairing_answer_label, answer)
+                }
+            }
+        }
+    }
+
+    private fun startDeviceHealthService() {
+        val intent = Intent(this, DeviceHealthService::class.java)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
     }
 
     companion object {

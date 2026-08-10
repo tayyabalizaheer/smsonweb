@@ -29,6 +29,18 @@
           </div>
         </header>
 
+        <section class="device-health" aria-label="Device status">
+          <span class="status-dot <%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'is-online' : 'is-offline' %>"></span>
+          <strong data-device-status><%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'Online' : 'Offline' %></strong>
+          <small data-device-last-ping>
+            <% if (device.lastPingAt) { %>
+              Last ping <%= new Intl.DateTimeFormat('en', { timeStyle: 'medium' }).format(new Date(device.lastPingAt)) %>
+            <% } else { %>
+              No health ping yet
+            <% } %>
+          </small>
+        </section>
+
         <form class="logout-form" action="/logout" method="post">
           <button type="submit">Unpair this browser</button>
         </form>

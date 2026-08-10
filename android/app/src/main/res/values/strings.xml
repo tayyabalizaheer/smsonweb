@@ -3,8 +3,14 @@
     <string name="app_name">SMS Sync</string>
     <string name="endpoint_label">Posting to: %1$s</string>
     <string name="pairing_code_label">Pairing code: %1$s</string>
-    <string name="pairing_options_label">Web choices: %1$s\nChoose this number: %2$s</string>
-    <string name="refresh_pairing">Refresh Pairing Numbers</string>
+    <string name="pairing_answer_waiting">Enter this code on the web, then tap the button below.</string>
+    <string name="pairing_answer_loading">Fetching latest pairing number...</string>
+    <string name="pairing_answer_unavailable">No active web pairing request found yet.</string>
+    <string name="pairing_answer_label">Choose this number on web: %1$s</string>
+    <string name="refresh_pairing">Fetch Latest Pairing Number</string>
+    <string name="health_channel_name">SMS Sync health</string>
+    <string name="health_notification_title">SMS Sync is online</string>
+    <string name="health_notification_text">Sending device health every 30 seconds.</string>
     <string name="status_ready">Ready. Old, sent, and incoming SMS messages will sync in the background.</string>
     <string name="status_permission_required">SMS receive/read permissions are required. Contacts permission adds names and emails when available.</string>
     <string name="permission_request">Grant Sync Permissions</string>
