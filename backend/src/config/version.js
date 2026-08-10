@@ -1,34 +1,36 @@
-const packageJson = require('../../package.json');
 const fs = require('fs');
 const path = require('path');
 
-const versionedFiles = [
-  'public/css/styles.css',
-  'public/js/app.js',
-  'public/js/pair.js',
-  'public/sw.js',
-  'public/manifest.webmanifest'
-];
+const packageJsonPath = path.join(__dirname, '..', '..', 'package.json');
+const TOKEN_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
-const getBuildStamp = () => {
-  const newestMtime = versionedFiles.reduce((latest, relativePath) => {
-    try {
-      const absolutePath = path.join(__dirname, '..', '..', relativePath);
-      const mtimeMs = fs.statSync(absolutePath).mtimeMs;
+const createStartupVersionToken = (length = 8) => {
+  let token = '';
 
-      return Math.max(latest, mtimeMs);
-    } catch (err) {
-      return latest;
-    }
-  }, 0);
+  for (let index = 0; index < length; index += 1) {
+    token += TOKEN_ALPHABET[Math.floor(Math.random() * TOKEN_ALPHABET.length)];
+  }
 
-  return newestMtime ? Math.floor(newestMtime).toString(36) : 'dev';
+  return token;
 };
 
-const appVersion = String(
-  process.env.APP_VERSION || `${packageJson.version || '1.0.0'}-${getBuildStamp()}`
-).trim();
+const startupVersionToken = createStartupVersionToken();
+
+const getPackageVersion = () => {
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+    return String(packageJson.version || '1.0.0').trim();
+  } catch (err) {
+    return '1.0.0';
+  }
+};
+
+const getAppVersion = () => {
+  return `${getPackageVersion()}-${startupVersionToken}`;
+};
 
 module.exports = {
-  appVersion
+  getAppVersion,
+  getPackageVersion
 };
