@@ -13,6 +13,54 @@ const getUniqueMessageWhere = (message) => {
   };
 };
 
+const getMessageIdentityKey = (message) => {
+  if (!message.deviceCode || !message.deviceMessageId) {
+    return null;
+  }
+
+  return `${message.deviceCode}:${message.deviceMessageId}`;
+};
+
+const findExistingIdentityKeys = async (messages) => {
+  const keyedMessages = messages.filter((message) => getMessageIdentityKey(message));
+
+  if (keyedMessages.length === 0) {
+    return new Set();
+  }
+
+  const existing = await prisma.message.findMany({
+    where: {
+      OR: keyedMessages.map((message) => ({
+        deviceCode: message.deviceCode,
+        deviceMessageId: message.deviceMessageId
+      }))
+    },
+    select: {
+      deviceCode: true,
+      deviceMessageId: true
+    }
+  });
+
+  return new Set(existing.map(getMessageIdentityKey));
+};
+
+const messageExists = async (message) => {
+  const uniqueWhere = getUniqueMessageWhere(message);
+
+  if (!uniqueWhere) {
+    return false;
+  }
+
+  const existing = await prisma.message.findUnique({
+    where: uniqueWhere,
+    select: {
+      id: true
+    }
+  });
+
+  return Boolean(existing);
+};
+
 const createMessage = async (message) => {
   const uniqueWhere = getUniqueMessageWhere(message);
 
@@ -59,6 +107,7 @@ const createMessages = async (messages) => {
     return map;
   }, new Map()).values());
 
+  const existingKeys = await findExistingIdentityKeys(dedupedMessages);
   const operations = dedupedMessages.map((message) => {
     const uniqueWhere = getUniqueMessageWhere(message);
 
@@ -85,7 +134,14 @@ const createMessages = async (messages) => {
 
   await prisma.$transaction(operations);
 
-  return { count: dedupedMessages.length };
+  return {
+    count: dedupedMessages.length,
+    createdMessages: dedupedMessages.filter((message) => {
+      const key = getMessageIdentityKey(message);
+
+      return !key || !existingKeys.has(key);
+    })
+  };
 };
 
 const findConversationSummaries = async ({ deviceCode } = {}) => {
@@ -258,6 +314,7 @@ const findMessagesSyncedAfter = async ({ deviceCode, after, limit = 10 }) => {
 };
 
 module.exports = {
+  messageExists,
   createMessage,
   createMessages,
   findConversationSummaries,

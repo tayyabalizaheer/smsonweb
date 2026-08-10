@@ -1,4 +1,5 @@
 const messageModel = require('../models/messageModel');
+const pushNotificationService = require('../services/pushNotificationService');
 
 const MAX_ADDRESS_LENGTH = 64;
 const MAX_BODY_LENGTH = 65535;
@@ -111,7 +112,15 @@ const storeSms = async (req, res, next) => {
   }
 
   try {
+    const existed = await messageModel.messageExists(value);
     const message = await messageModel.createMessage(value);
+
+    if (!existed) {
+      await pushNotificationService.notifyNewMessages({
+        deviceCode: message.deviceCode,
+        messages: [message]
+      });
+    }
 
     return res.status(201).json({
       id: message.id.toString(),
@@ -153,6 +162,11 @@ const storeSmsBatch = async (req, res, next) => {
 
   try {
     const result = await messageModel.createMessages(normalized);
+
+    await pushNotificationService.notifyNewMessages({
+      deviceCode: deviceCode || normalized.find((message) => message.deviceCode)?.deviceCode,
+      messages: result.createdMessages || []
+    });
 
     return res.status(201).json({
       received: true,

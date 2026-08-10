@@ -9,6 +9,37 @@ import android.provider.ContactsContract
 import android.provider.Telephony
 
 class SmsStore(private val context: Context) {
+    fun readStats(): SmsStats {
+        var total = 0
+        val addresses = mutableSetOf<String>()
+        val projection = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.TYPE)
+        val selection = "${Telephony.Sms.TYPE} IN (?, ?)"
+        val selectionArgs = arrayOf(
+            Telephony.Sms.MESSAGE_TYPE_INBOX.toString(),
+            Telephony.Sms.MESSAGE_TYPE_SENT.toString()
+        )
+
+        context.contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+
+            while (cursor.moveToNext()) {
+                total += 1
+                cursor.getString(addressIndex)?.trim()?.takeIf { it.isNotBlank() }?.let(addresses::add)
+            }
+        }
+
+        return SmsStats(
+            totalMessages = total,
+            contactCount = addresses.size
+        )
+    }
+
     fun readInboxAndSent(): List<SmsRecord> {
         val records = mutableListOf<SmsRecord>()
         val contactResolver = ContactResolver(context)
@@ -69,6 +100,11 @@ class SmsStore(private val context: Context) {
         return records
     }
 }
+
+data class SmsStats(
+    val totalMessages: Int,
+    val contactCount: Int
+)
 
 private data class ContactIdentity(
     val name: String?,

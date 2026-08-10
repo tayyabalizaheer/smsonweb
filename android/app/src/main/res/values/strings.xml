@@ -1,7 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMS Sync</string>
+    <string name="app_name_caps">SMS SYNC</string>
     <string name="endpoint_label">Posting to: %1$s</string>
+    <string name="device_code_label">Device code %1$s</string>
+    <string name="device_online">Online</string>
+    <string name="device_ready">Ready</string>
+    <string name="stat_zero">0</string>
+    <string name="stat_sms">SMS</string>
+    <string name="stat_contacts">Contacts</string>
+    <string name="stat_linked">Linked</string>
+    <string name="stat_linked_initial">0/4</string>
+    <string name="stat_linked_value">%1$d/4</string>
+    <string name="linked_devices">Linked devices</string>
+    <string name="android_device_row">Android phone</string>
+    <string name="android_device_subtitle">This device - code %1$s</string>
     <string name="pairing_code_label">Pairing code: %1$s</string>
     <string name="pairing_answer_waiting">Enter this code on the web, then tap the button below.</string>
     <string name="pairing_answer_loading">Fetching latest pairing number...</string>
@@ -9,10 +22,16 @@
     <string name="pairing_answer_label">Choose this number on web: %1$s</string>
     <string name="refresh_pairing">Fetch Latest Pairing Number</string>
     <string name="pair_new_device">Pair New Web Device</string>
+    <string name="pair_new_device_help">Show this phone code, enter it on web, then fetch the latest 3 digit number.</string>
+    <string name="show_pairing_code">Show Pairing Code</string>
     <string name="paired_web_sessions">Paired web sessions</string>
     <string name="refresh_sessions">Refresh Paired Sessions</string>
+    <string name="refresh_sessions_short">Refresh</string>
     <string name="session_slot_paired">Slot %1$d: paired</string>
     <string name="session_slot_empty">Slot %1$d: empty</string>
+    <string name="session_slot_title">Browser %1$d</string>
+    <string name="session_slot_paired_subtitle">Paired web session</string>
+    <string name="session_slot_empty_subtitle">Empty slot</string>
     <string name="unpair_slot">Unpair Slot %1$d</string>
     <string name="health_channel_name">SMS Sync health</string>
     <string name="health_notification_title">SMS Sync is online</string>

@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="background">#F7F8FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_muted">#F1F5F7</color>
+    <color name="border">#DFE7EC</color>
     <color name="text_primary">#172026</color>
     <color name="text_secondary">#596874</color>
     <color name="primary">#0F766E</color>
     <color name="primary_dark">#0B5E58</color>
+    <color name="primary_soft">#E3F5F2</color>
+    <color name="success">#16A34A</color>
+    <color name="danger">#DC2626</color>
 </resources>

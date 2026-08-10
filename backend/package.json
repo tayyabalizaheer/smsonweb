@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/prisma.js && node --check src/config/version.js && node --check src/models/messageModel.js && node --check src/models/deviceModel.js && node --check src/controllers/smsController.js && node --check src/controllers/deviceController.js && node --check src/controllers/versionController.js && node --check src/routes/api.js && node --check src/routes/web.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/config/prisma.js && node --check src/config/version.js && node --check src/config/webPush.js && node --check src/models/messageModel.js && node --check src/models/deviceModel.js && node --check src/models/pushSubscriptionModel.js && node --check src/controllers/smsController.js && node --check src/controllers/deviceController.js && node --check src/controllers/pushController.js && node --check src/controllers/versionController.js && node --check src/services/pushNotificationService.js && node --check src/routes/api.js && node --check src/routes/web.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
@@ -21,12 +21,13 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@prisma/client": "^6.14.0",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
-    "@prisma/client": "^6.14.0",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
-    "prisma": "^6.14.0"
+    "prisma": "^6.14.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

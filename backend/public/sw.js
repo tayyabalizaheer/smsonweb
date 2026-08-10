@@ -80,17 +80,54 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+self.addEventListener('push', (event) => {
+  let payload = {};
+
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (err) {
+    payload = {
+      title: 'New SMS message',
+      body: event.data ? event.data.text() : ''
+    };
+  }
+
+  const title = payload.title || 'New SMS message';
+  const url = payload.url || '/?refresh=1';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || 'Open SMS Sync to view the latest messages.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/maskable-512.png',
+      tag: payload.tag || 'sms-sync-message',
+      renotify: true,
+      data: {
+        url
+      }
+    })
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || '/?refresh=1';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ('focus' in client) {
-          client.navigate(targetUrl);
-          return client.focus();
+          return client.navigate(targetUrl).then((focusedClient) => {
+            const targetClient = focusedClient || client;
+
+            targetClient.postMessage({
+              type: 'SMS_SYNC_REFRESH',
+              url: targetUrl
+            });
+
+            return targetClient.focus();
+          });
         }
       }
 

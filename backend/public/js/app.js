@@ -1,6 +1,9 @@
 (function () {
   var mobileQuery = window.matchMedia('(max-width: 820px)');
   var shell = null;
+  var conversationPanel = null;
+  var conversationList = null;
+  var pullRefreshIndicator = null;
   var thread = null;
   var header = null;
   var links = [];
@@ -13,6 +16,9 @@
   var updateStatus = null;
   var availableVersion = '';
   var latestNotificationSync = '';
+  var pushServerConfigured = true;
+  var pushNotificationsEnabled = false;
+  var isRefreshingContacts = false;
   var currentAddress = '';
   var currentConversation = null;
   var nextCursor = null;
@@ -40,6 +46,19 @@
     var deviceCode = shell?.dataset.deviceCode || 'default';
 
     return 'sms-sync-latest-notification-sync:' + deviceCode;
+  }
+
+  function urlBase64ToUint8Array(value) {
+    var padding = '='.repeat((4 - value.length % 4) % 4);
+    var base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var output = new Uint8Array(rawData.length);
+
+    for (var index = 0; index < rawData.length; index += 1) {
+      output[index] = rawData.charCodeAt(index);
+    }
+
+    return output;
   }
 
   function escapeHtml(value) {
@@ -150,6 +169,42 @@
     thread.innerHTML = messages.map(renderMessage).join('');
   }
 
+  function renderConversationLink(conversation) {
+    var displayName = conversation.displayName || conversation.address || 'Unknown';
+    var latestBody = conversation.latestMessage?.body || '';
+
+    return [
+      '<a',
+      ' class="conversation-link"',
+      ' href="/?address=' + encodeURIComponent(conversation.address || '') + '"',
+      ' data-address="' + escapeHtml(conversation.address || '') + '"',
+      ' data-display-name="' + escapeHtml(displayName) + '"',
+      ' data-contact-email="' + escapeHtml(conversation.contactEmail || '') + '">',
+      '<span class="avatar" aria-hidden="true">' + escapeHtml(displayName.slice(0, 1).toUpperCase()) + '</span>',
+      '<span class="conversation-copy">',
+      '<strong>' + escapeHtml(displayName) + '</strong>',
+      '<em>' + escapeHtml(conversation.contactEmail || conversation.address || '') + '</em>',
+      '<small>' + escapeHtml(latestBody) + '</small>',
+      '</span>',
+      '</a>'
+    ].join('');
+  }
+
+  function renderConversationList(conversations) {
+    if (!conversationList) {
+      if (conversations.length) {
+        window.location.replace('/?refresh=1');
+      }
+
+      return;
+    }
+
+    conversationList.innerHTML = conversations.map(renderConversationLink).join('');
+    links = Array.prototype.slice.call(document.querySelectorAll('.conversation-link'));
+    setupConversationLinks();
+    setActiveLink(currentAddress);
+  }
+
   function showOlderLoader() {
     if (thread.querySelector('.chat-loading.is-top')) {
       return;
@@ -197,6 +252,60 @@
 
       return response.json();
     });
+  }
+
+  function refreshConversationList() {
+    if (isRefreshingContacts) {
+      return Promise.resolve();
+    }
+
+    isRefreshingContacts = true;
+
+    if (pullRefreshIndicator) {
+      pullRefreshIndicator.hidden = false;
+      pullRefreshIndicator.classList.add('is-visible', 'is-refreshing');
+    }
+
+    return fetch('/api/conversations?ts=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json'
+      }
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('Refresh failed');
+        }
+
+        return response.json();
+      })
+      .then(function (data) {
+        renderConversationList(data.conversations || []);
+
+        if (data.latestSyncedAt) {
+          shell.dataset.latestSync = data.latestSyncedAt;
+          latestNotificationSync = data.latestSyncedAt;
+          window.localStorage.setItem(getNotificationStorageKey(), latestNotificationSync);
+        }
+
+        if (currentAddress) {
+          openConversation(currentAddress, {
+            pushState: false
+          });
+        }
+      })
+      .catch(function () {})
+      .finally(function () {
+        isRefreshingContacts = false;
+
+        if (pullRefreshIndicator) {
+          pullRefreshIndicator.classList.remove('is-refreshing');
+          window.setTimeout(function () {
+            pullRefreshIndicator.classList.remove('is-visible');
+            pullRefreshIndicator.hidden = true;
+          }, 220);
+        }
+      });
   }
 
   function openConversation(address, options) {
@@ -322,9 +431,13 @@
   }
 
   function setupHistory() {
+    var params = new URLSearchParams(window.location.search);
+    var address = params.get('address');
+
     window.history.replaceState({
-      smsSyncView: 'contacts'
-    }, '', window.location.pathname);
+      smsSyncView: address ? 'thread' : 'contacts',
+      address: address || ''
+    }, '', window.location.pathname + window.location.search);
 
     window.addEventListener('popstate', function (event) {
       if (event.state && event.state.smsSyncView === 'thread' && event.state.address) {
@@ -339,11 +452,9 @@
       });
     });
 
-    var address = new URLSearchParams(window.location.search).get('address');
-
     if (address) {
       openConversation(address, {
-        pushState: true
+        pushState: false
       });
     }
   }
@@ -353,6 +464,67 @@
       if (thread.scrollTop <= 40) {
         loadOlderMessages();
       }
+    });
+  }
+
+  function setupPullToRefresh() {
+    if (!conversationPanel || !conversationList || !pullRefreshIndicator) {
+      return;
+    }
+
+    var startY = 0;
+    var pullDistance = 0;
+    var isPulling = false;
+
+    conversationPanel.addEventListener('touchstart', function (event) {
+      if (!mobileQuery.matches || !event.touches.length || shell.classList.contains('is-thread-open')) {
+        return;
+      }
+
+      if (conversationList.scrollTop > 0) {
+        return;
+      }
+
+      startY = event.touches[0].clientY;
+      pullDistance = 0;
+      isPulling = true;
+    }, { passive: true });
+
+    conversationPanel.addEventListener('touchmove', function (event) {
+      if (!isPulling || !event.touches.length) {
+        return;
+      }
+
+      pullDistance = Math.max(0, event.touches[0].clientY - startY);
+
+      if (pullDistance <= 0) {
+        return;
+      }
+
+      if (pullDistance > 12) {
+        event.preventDefault();
+      }
+
+      pullRefreshIndicator.hidden = false;
+      pullRefreshIndicator.classList.add('is-visible');
+      pullRefreshIndicator.style.transform = 'translate(-50%, ' + Math.min(pullDistance * 0.45, 56) + 'px)';
+    }, { passive: false });
+
+    conversationPanel.addEventListener('touchend', function () {
+      if (!isPulling) {
+        return;
+      }
+
+      isPulling = false;
+      pullRefreshIndicator.style.transform = '';
+
+      if (pullDistance >= 72) {
+        refreshConversationList();
+        return;
+      }
+
+      pullRefreshIndicator.classList.remove('is-visible');
+      pullRefreshIndicator.hidden = true;
     });
   }
 
@@ -404,6 +576,79 @@
     window.setInterval(fetchDeviceStatus, 30000);
   }
 
+  function fetchPushPublicKey() {
+    return fetch('/api/push/public-key?ts=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json'
+      }
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('Push key request failed');
+      }
+
+      return response.json();
+    });
+  }
+
+  function savePushSubscription(subscription) {
+    return fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        subscription: subscription.toJSON()
+      })
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('Push subscribe failed');
+      }
+
+      return response.json();
+    });
+  }
+
+  function ensurePushSubscription() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      pushNotificationsEnabled = false;
+      return Promise.resolve(false);
+    }
+
+    return fetchPushPublicKey()
+      .then(function (data) {
+        if (!data.enabled || !data.publicKey) {
+          pushServerConfigured = false;
+          pushNotificationsEnabled = false;
+          return false;
+        }
+
+        pushServerConfigured = true;
+        return navigator.serviceWorker.ready
+          .then(function (registration) {
+            return registration.pushManager.getSubscription()
+              .then(function (subscription) {
+                return subscription || registration.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+                });
+              });
+          })
+          .then(function (subscription) {
+            return savePushSubscription(subscription);
+          })
+          .then(function () {
+            pushNotificationsEnabled = true;
+            return true;
+          });
+      })
+      .catch(function () {
+        pushNotificationsEnabled = false;
+        return false;
+      });
+  }
+
   function updateNotificationButton() {
     if (!notificationButton) {
       return;
@@ -427,8 +672,16 @@
     }
 
     if (Notification.permission === 'granted') {
-      notificationButton.textContent = 'Test';
-      notificationButton.title = 'Send a test notification.';
+      if (!pushServerConfigured) {
+        notificationButton.textContent = 'Setup Push';
+        notificationButton.title = 'Server VAPID keys are missing, so closed-app notifications cannot start yet.';
+        return;
+      }
+
+      notificationButton.textContent = pushNotificationsEnabled ? 'Test' : 'Enable Push';
+      notificationButton.title = pushNotificationsEnabled
+        ? 'Send a test notification.'
+        : 'Enable background notifications for this installed web app.';
       return;
     }
 
@@ -480,8 +733,10 @@
     }
 
     if (Notification.permission === 'granted') {
-      showTestNotification();
-      updateNotificationButton();
+      ensurePushSubscription().then(function () {
+        showTestNotification();
+        updateNotificationButton();
+      });
       return;
     }
 
@@ -492,11 +747,15 @@
     }
 
     Notification.requestPermission().then(function (permission) {
-      updateNotificationButton();
-
       if (permission === 'granted') {
-        showTestNotification();
+        ensurePushSubscription().then(function () {
+          showTestNotification();
+          updateNotificationButton();
+        });
+        return;
       }
+
+      updateNotificationButton();
     });
   }
 
@@ -559,7 +818,11 @@
         var messages = data.messages || [];
 
         if (messages.length) {
-          showMessageNotification(messages);
+          refreshConversationList();
+
+          if (!pushNotificationsEnabled) {
+            showMessageNotification(messages);
+          }
         }
 
         if (data.latestSyncedAt) {
@@ -577,6 +840,10 @@
     if (notificationButton) {
       updateNotificationButton();
       notificationButton.addEventListener('click', requestNotificationPermission);
+    }
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      ensurePushSubscription().then(updateNotificationButton);
     }
 
     window.setInterval(fetchMessageNotifications, 30000);
@@ -735,8 +1002,46 @@
     checkForAppUpdate();
   }
 
+  function handleRefreshUrl(url) {
+    var parsedUrl = new URL(url || window.location.href, window.location.origin);
+    var address = parsedUrl.searchParams.get('address');
+
+    return refreshConversationList().then(function () {
+      if (address) {
+        openConversation(address, {
+          pushState: false
+        });
+      }
+    });
+  }
+
+  function setupNotificationRefreshHandling() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', function (event) {
+        if (event.data?.type === 'SMS_SYNC_REFRESH') {
+          handleRefreshUrl(event.data.url);
+        }
+      });
+    }
+
+    var params = new URLSearchParams(window.location.search);
+
+    if (params.get('refresh') === '1') {
+      params.delete('refresh');
+      window.history.replaceState(window.history.state || {
+        smsSyncView: params.get('address') ? 'thread' : 'contacts'
+      }, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''));
+      window.setTimeout(function () {
+        handleRefreshUrl(window.location.href);
+      }, 150);
+    }
+  }
+
   window.addEventListener('load', function () {
     shell = document.querySelector('.messenger-shell');
+    conversationPanel = document.querySelector('.conversation-panel');
+    conversationList = document.querySelector('.conversation-list');
+    pullRefreshIndicator = document.querySelector('[data-pull-refresh]');
     thread = document.querySelector('.message-thread');
     header = document.querySelector('.thread-header');
     links = Array.prototype.slice.call(document.querySelectorAll('.conversation-link'));
@@ -757,9 +1062,11 @@
     setupBackButton();
     setupSettingsPanel();
     setupInfiniteScroll();
+    setupPullToRefresh();
     setupHistory();
     setupDeviceStatusPolling();
     setupMessageNotificationPolling();
     setupAppUpdateCheck();
+    setupNotificationRefreshHandling();
   });
 })();

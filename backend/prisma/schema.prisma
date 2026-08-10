@@ -45,3 +45,16 @@ model Device {
 
   @@map("devices")
 }
+
+model PushSubscription {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  deviceCode String   @map("device_code") @db.VarChar(6)
+  endpoint   String   @unique @db.VarChar(512)
+  p256dh     String   @db.VarChar(128)
+  auth       String   @db.VarChar(64)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@index([deviceCode], map: "push_subscriptions_device_code_idx")
+  @@map("push_subscriptions")
+}
