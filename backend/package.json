@@ -1,6 +1,6 @@
 {
   "name": "sms-one-way-sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lightweight one-way SMS synchronization backend using Node.js, Express, EJS, Prisma, and MySQL.",
   "main": "src/server.js",
   "scripts": {
