@@ -55,6 +55,7 @@ p {
 .conversation-panel {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--panel);
@@ -195,6 +196,7 @@ h1 {
 .thread-panel {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   background:
     linear-gradient(135deg, rgba(15, 143, 127, 0.06), transparent 32%),
@@ -214,11 +216,17 @@ h1 {
 .message-thread {
   display: flex;
   flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 8px;
   overflow: auto;
-  padding: 22px;
+  padding: 22px 22px clamp(72px, 12vh, 128px);
+  scroll-padding-bottom: 96px;
   overscroll-behavior: contain;
+}
+
+.thread-back {
+  display: none;
 }
 
 .bubble-row {
@@ -294,7 +302,7 @@ h1 {
 
   .messenger-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(260px, 42dvh) minmax(0, 58dvh);
+    grid-template-rows: 1fr;
     height: 100vh;
     height: 100dvh;
     min-height: 0;
@@ -305,9 +313,25 @@ h1 {
   }
 
   .conversation-panel {
-    min-height: 0;
+    height: 100vh;
+    height: 100dvh;
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 0;
+  }
+
+  .thread-panel {
+    display: none;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .messenger-shell.is-thread-open .conversation-panel {
+    display: none;
+  }
+
+  .messenger-shell.is-thread-open .thread-panel {
+    display: flex;
   }
 
   .app-header,
@@ -344,12 +368,9 @@ h1 {
     height: 40px;
   }
 
-  .thread-panel {
-    min-height: 0;
-  }
-
   .message-thread {
-    padding: 14px max(12px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    padding: 14px max(12px, env(safe-area-inset-right)) max(92px, calc(env(safe-area-inset-bottom) + 80px)) max(12px, env(safe-area-inset-left));
+    scroll-padding-bottom: 110px;
   }
 
   .message-bubble {
@@ -359,13 +380,32 @@ h1 {
   .message-bubble footer {
     flex-wrap: wrap;
   }
+
+  .thread-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-height: 40px;
+    border-radius: 8px;
+    padding: 0 10px 0 0;
+    color: var(--accent-strong);
+    font-size: 0.92rem;
+    font-weight: 800;
+  }
+
+  .thread-back span {
+    display: inline-grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 50%;
+    background: #e3f5f2;
+    font-size: 1.1rem;
+  }
 }
 
 @media (max-width: 480px) {
-  .messenger-shell {
-    grid-template-rows: minmax(240px, 40dvh) minmax(0, 60dvh);
-  }
-
   .eyebrow {
     font-size: 0.7rem;
   }

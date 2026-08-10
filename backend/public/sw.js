@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sms-sync-v1';
+const CACHE_NAME = 'sms-sync-v2';
 const STATIC_ASSETS = [
   '/offline.html',
   '/css/styles.css',

@@ -163,9 +163,8 @@ const renderSmsFeed = async (req, res, next) => {
 
     const conversations = Array.from(conversationsByAddress.values())
       .sort((a, b) => b.latestMessage.messageAt - a.latestMessage.messageAt);
-    const selectedAddress = typeof req.query.address === 'string'
-      ? req.query.address
-      : conversations[0]?.address;
+    const hasExplicitSelection = typeof req.query.address === 'string' && req.query.address.trim() !== '';
+    const selectedAddress = hasExplicitSelection ? req.query.address : conversations[0]?.address;
     const selectedConversation = conversations.find((conversation) => {
       return conversation.address === selectedAddress;
     }) || conversations[0] || null;
@@ -185,6 +184,7 @@ const renderSmsFeed = async (req, res, next) => {
       conversations,
       selectedConversation,
       selectedMessages,
+      hasExplicitSelection,
       totalMessages: messages.length,
       lastSyncedAt
     });

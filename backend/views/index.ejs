@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/css/styles.css">
   </head>
   <body>
-    <main class="messenger-shell">
+    <main class="messenger-shell <%= hasExplicitSelection ? 'is-thread-open' : '' %>">
       <aside class="conversation-panel" aria-label="Conversations">
         <header class="app-header">
           <div>
@@ -81,6 +81,10 @@
           </div>
         <% } else { %>
           <header class="thread-header">
+            <a class="thread-back" href="/" aria-label="Back to contacts">
+              <span aria-hidden="true">&larr;</span>
+              <strong>Back</strong>
+            </a>
             <span class="avatar large" aria-hidden="true"><%= selectedConversation.displayName.slice(0, 1).toUpperCase() %></span>
             <div>
               <h2><%= selectedConversation.displayName %></h2>
