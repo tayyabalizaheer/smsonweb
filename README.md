@@ -18,7 +18,9 @@ Backend layout:
 
 ```text
 backend/
-+-- prisma/schema.prisma
++-- prisma/
+|   +-- schema.prisma
+|   `-- migrations/
 +-- public/css/styles.css
 +-- src/
 |   +-- app.js
@@ -62,13 +64,13 @@ Run these commands from `backend/`.
    cp .env.example .env
    ```
 
-5. Generate the Prisma client and create the table:
+5. Generate the Prisma client and create the table in development:
 
    ```bash
    npm run prisma:migrate -- --name init
    ```
 
-   For production deployments, run:
+   For production deployments, apply the committed migrations:
 
    ```bash
    npm run prisma:deploy
