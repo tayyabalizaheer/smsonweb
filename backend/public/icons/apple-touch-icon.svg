@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="SMS Sync">
+  <rect width="180" height="180" rx="38" fill="#0f8f7f"/>
+  <path fill="#ffffff" d="M39 50c0-11 9-20 20-20h62c11 0 20 9 20 20v45c0 11-9 20-20 20H86l-30 26c-6 5-15 1-15-7v-19c-11 0-20-9-20-20V50Z"/>
+  <path fill="#0f8f7f" d="M57 58h68v11H57V58Zm0 24h52v11H57V82Z"/>
+</svg>

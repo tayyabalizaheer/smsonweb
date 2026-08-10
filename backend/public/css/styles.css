@@ -20,6 +20,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -41,6 +42,7 @@ p {
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   width: min(1280px, calc(100% - 32px));
   height: calc(100vh - 32px);
+  height: calc(100dvh - 32px);
   min-height: 620px;
   margin: 16px auto;
   overflow: hidden;
@@ -119,8 +121,10 @@ h1 {
 }
 
 .conversation-list {
+  flex: 1;
   overflow: auto;
   padding: 8px;
+  overscroll-behavior: contain;
 }
 
 .conversation-link {
@@ -214,6 +218,7 @@ h1 {
   gap: 8px;
   overflow: auto;
   padding: 22px;
+  overscroll-behavior: contain;
 }
 
 .bubble-row {
@@ -276,11 +281,23 @@ h1 {
   text-align: center;
 }
 
+.offline-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+}
+
 @media (max-width: 820px) {
+  body {
+    background: var(--panel);
+  }
+
   .messenger-shell {
     grid-template-columns: 1fr;
-    height: auto;
-    min-height: 100vh;
+    grid-template-rows: minmax(260px, 42dvh) minmax(0, 58dvh);
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     margin: 0;
     width: 100%;
     border: 0;
@@ -288,20 +305,99 @@ h1 {
   }
 
   .conversation-panel {
-    max-height: 44vh;
+    min-height: 0;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
+  .app-header,
+  .thread-header {
+    min-height: 70px;
+    padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
+  }
+
+  .last-sync {
+    padding-inline: max(12px, env(safe-area-inset-left));
+    font-size: 0.82rem;
+  }
+
+  .conversation-list {
+    padding: 6px;
+  }
+
+  .conversation-link {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .conversation-stats {
+    grid-column: 2;
+    grid-row: 2;
+    justify-items: start;
+    display: flex;
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+  }
+
   .thread-panel {
-    min-height: 56vh;
+    min-height: 0;
   }
 
   .message-thread {
-    padding: 14px;
+    padding: 14px max(12px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   }
 
   .message-bubble {
     max-width: 88%;
+  }
+
+  .message-bubble footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .messenger-shell {
+    grid-template-rows: minmax(240px, 40dvh) minmax(0, 60dvh);
+  }
+
+  .eyebrow {
+    font-size: 0.7rem;
+  }
+
+  h1 {
+    font-size: 1.25rem;
+  }
+
+  .sync-meta {
+    min-width: 58px;
+    font-size: 0.72rem;
+  }
+
+  .thread-header h2 {
+    max-width: calc(100vw - 92px);
+    font-size: 1rem;
+  }
+
+  .thread-header p {
+    overflow: hidden;
+    max-width: calc(100vw - 92px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .avatar.large {
+    width: 44px;
+    height: 44px;
+  }
+
+  .message-bubble {
+    max-width: 94%;
+    padding: 9px 10px 7px;
   }
 }

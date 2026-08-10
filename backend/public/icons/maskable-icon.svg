@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SMS Sync">
+  <rect width="512" height="512" fill="#0f8f7f"/>
+  <circle cx="256" cy="256" r="220" fill="#0f8f7f"/>
+  <path fill="#ffffff" d="M126 148c0-30 24-54 54-54h152c30 0 54 24 54 54v116c0 30-24 54-54 54h-88l-82 72c-14 12-36 2-36-17v-55c-30 0-54-24-54-54V148Z"/>
+  <path fill="#0f8f7f" d="M166 165h180v31H166v-31Zm0 63h133v31H166v-31Z"/>
+</svg>

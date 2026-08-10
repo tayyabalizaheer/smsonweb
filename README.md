@@ -6,6 +6,7 @@ Lightweight one-way SMS synchronization:
 - The client uses WorkManager to sync in the background when network is available, including while the screen is off.
 - The client posts batches to `POST /api/sms/bulk` and keeps `POST /api/sms` compatible for single-message posts.
 - Node.js, Express, EJS, Prisma ORM, and MySQL store and display a messenger-style SMS view.
+- The web dashboard is responsive and installable as a Progressive Web App.
 
 ## Project Layout
 
@@ -95,6 +96,17 @@ Run these commands from `backend/`.
    ```text
    http://localhost:3000
    ```
+
+## Web App Installation
+
+The backend serves PWA assets from `public/`:
+
+- `/manifest.webmanifest`
+- `/sw.js`
+- PNG app icons for Android/Desktop install prompts
+- Apple touch icon for iOS home-screen install
+
+Production PWA installation requires HTTPS. On `https://sms.engrtayyabali.com/`, open the site in Chrome, Edge, or a mobile browser and use the browser's install/add-to-home-screen option.
 
 ## API
 
