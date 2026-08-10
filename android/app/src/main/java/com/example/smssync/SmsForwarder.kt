@@ -1,55 +1,62 @@
 package com.example.smssync
 
-import android.util.Log
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class SmsForwarder {
-    fun forward(sender: String, body: String) {
+    @Throws(IOException::class)
+    fun forwardBatch(messages: List<SmsRecord>): Int {
+        if (messages.isEmpty()) {
+            return 0
+        }
+
+        val payloadMessages = JSONArray()
+
+        messages.forEach { message ->
+            payloadMessages.put(
+                JSONObject()
+                    .put("deviceMessageId", message.deviceMessageId)
+                    .put("address", message.address)
+                    .put("contactName", message.contactName)
+                    .put("contactEmail", message.contactEmail)
+                    .put("direction", message.direction)
+                    .put("body", message.body)
+                    .put("messageAt", message.messageAtMillis)
+            )
+        }
+
         val payload = JSONObject()
-            .put("sender", sender)
-            .put("body", body)
+            .put("messages", payloadMessages)
             .toString()
 
         val request = Request.Builder()
-            .url(BuildConfig.SMS_API_URL)
+            .url(BuildConfig.SMS_BULK_API_URL)
             .post(payload.toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e(TAG, "Failed to forward SMS to ${BuildConfig.SMS_API_URL}", e)
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val responseBody = response.body?.string().orEmpty()
+                throw IOException("SMS sync failed with HTTP ${response.code}: $responseBody")
             }
+        }
 
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    if (!it.isSuccessful) {
-                        val responseBody = it.body?.string().orEmpty()
-                        Log.e(TAG, "SMS forward failed with HTTP ${it.code}: $responseBody")
-                    } else {
-                        Log.d(TAG, "SMS forwarded successfully.")
-                    }
-                }
-            }
-        })
+        return messages.size
     }
 
     companion object {
-        private const val TAG = "SmsForwarder"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private val client = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }

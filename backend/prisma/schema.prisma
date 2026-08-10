@@ -8,12 +8,19 @@ datasource db {
 }
 
 model Message {
-  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  sender     String   @db.VarChar(64)
-  body       String   @db.Text
-  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamp(0)
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  deviceMessageId String?  @unique(map: "messages_device_message_id_key") @map("device_message_id") @db.VarChar(128)
+  address         String   @map("sender") @db.VarChar(64)
+  contactName     String?  @map("contact_name") @db.VarChar(160)
+  contactEmail    String?  @map("contact_email") @db.VarChar(254)
+  direction       String   @default("received") @db.VarChar(16)
+  body            String   @db.Text
+  messageAt       DateTime @default(now()) @map("message_at") @db.Timestamp(0)
+  syncedAt        DateTime @default(now()) @map("received_at") @db.Timestamp(0)
 
-  @@index([receivedAt])
-  @@index([sender])
+  @@index([messageAt], map: "messages_message_at_idx")
+  @@index([syncedAt], map: "idx_messages_received_at")
+  @@index([address], map: "idx_messages_sender")
+  @@index([direction], map: "messages_direction_idx")
   @@map("messages")
 }

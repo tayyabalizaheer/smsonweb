@@ -2,9 +2,10 @@
 
 Lightweight one-way SMS synchronization:
 
-- Android 10+ Kotlin client listens for incoming SMS messages.
-- The client asynchronously posts `{ sender, body }` to `POST /api/sms`.
-- Node.js, Express, EJS, Prisma ORM, and MySQL store and display the synced SMS feed.
+- Android 10+ Kotlin client reads old Inbox/Sent SMS messages and listens for new incoming SMS events.
+- The client uses WorkManager to sync in the background when network is available, including while the screen is off.
+- The client posts batches to `POST /api/sms/bulk` and keeps `POST /api/sms` compatible for single-message posts.
+- Node.js, Express, EJS, Prisma ORM, and MySQL store and display a messenger-style SMS view.
 
 ## Project Layout
 
@@ -76,6 +77,13 @@ Run these commands from `backend/`.
    npm run prisma:deploy
    ```
 
+   After pulling updates on the production server, run:
+
+   ```bash
+   npx prisma generate
+   npx prisma migrate deploy
+   ```
+
 6. Start the server:
 
    ```bash
@@ -96,8 +104,42 @@ Request:
 
 ```json
 {
-  "sender": "+15551234567",
-  "body": "Hello from Android"
+  "address": "+15551234567",
+  "direction": "received",
+  "body": "Hello from Android",
+  "messageAt": 1786372200000,
+  "deviceMessageId": "android-sms:42",
+  "contactName": "Jane Contact",
+  "contactEmail": "jane@example.com"
+}
+```
+
+Legacy `{ "sender": "...", "body": "..." }` payloads are still accepted.
+
+### `POST /api/sms/bulk`
+
+Request:
+
+```json
+{
+  "messages": [
+    {
+      "address": "+15551234567",
+      "direction": "received",
+      "body": "Hello from Android",
+      "messageAt": 1786372200000,
+      "deviceMessageId": "android-sms:42",
+      "contactName": "Jane Contact",
+      "contactEmail": "jane@example.com"
+    },
+    {
+      "address": "+15557654321",
+      "direction": "sent",
+      "body": "Reply from this phone",
+      "messageAt": 1786372500000,
+      "deviceMessageId": "android-sms:43"
+    }
+  ]
 }
 ```
 
@@ -114,12 +156,13 @@ Open `android/` in Android Studio.
 The default API endpoint is configured in [android/app/build.gradle](android/app/build.gradle):
 
 ```gradle
-buildConfigField "String", "SMS_API_URL", "\"http://10.0.2.2:3000/api/sms\""
+buildConfigField "String", "SMS_API_URL", "\"https://sms.engrtayyabali.com/api/sms\""
 ```
 
 Use:
 
-- `http://10.0.2.2:3000/api/sms` for the Android emulator.
+- `https://sms.engrtayyabali.com/api/sms` for production.
+- `http://10.0.2.2:3000/api/sms` for local backend testing with the Android emulator.
 - `http://YOUR_COMPUTER_LAN_IP:3000/api/sms` for a physical device on the same network.
 - HTTPS for production deployments.
 
@@ -127,8 +170,17 @@ The app declares:
 
 - `android.permission.INTERNET`, a normal manifest permission.
 - `android.permission.RECEIVE_SMS`, requested at runtime from `MainActivity`.
+- `android.permission.READ_SMS`, requested at runtime so old Inbox/Sent SMS can be synced.
+- `android.permission.READ_CONTACTS`, requested at runtime so contact names/emails can be displayed when available.
+- `android.permission.RECEIVE_BOOT_COMPLETED`, so periodic background sync is scheduled after reboot.
 
 For local HTTP development the manifest enables cleartext traffic. For production, serve the backend over HTTPS and remove cleartext access.
+
+The app schedules:
+
+- An immediate sync after SMS permissions are granted.
+- A one-time sync after each incoming SMS broadcast.
+- A periodic WorkManager sync every 15 minutes, which is Android's minimum periodic interval.
 
 ## Test SMS In The Emulator
 

@@ -22,7 +22,7 @@ class MainActivity : Activity() {
 
         endpointText.text = getString(R.string.endpoint_label, BuildConfig.SMS_API_URL)
         permissionButton.setOnClickListener {
-            requestReceiveSmsPermission()
+            requestSmsPermissionsOrSync()
         }
 
         updatePermissionState()
@@ -40,19 +40,22 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode == RECEIVE_SMS_REQUEST_CODE) {
+        if (requestCode == SMS_PERMISSION_REQUEST_CODE) {
+            if (hasSmsPermissions()) {
+                SmsSyncScheduler.enqueueImmediate(this)
+                SmsSyncScheduler.ensurePeriodic(this)
+            }
+
             updatePermissionState()
         }
     }
 
     private fun updatePermissionState() {
-        val receiveSmsGranted = checkSelfPermission(Manifest.permission.RECEIVE_SMS) ==
-            PackageManager.PERMISSION_GRANTED
-
-        if (receiveSmsGranted) {
+        if (hasSmsPermissions()) {
             statusText.text = getString(R.string.status_ready)
             permissionButton.isEnabled = false
             permissionButton.text = getString(R.string.permission_granted)
+            SmsSyncScheduler.ensurePeriodic(this)
         } else {
             statusText.text = getString(R.string.status_permission_required)
             permissionButton.isEnabled = true
@@ -60,16 +63,27 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun requestReceiveSmsPermission() {
-        if (checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+    private fun requestSmsPermissionsOrSync() {
+        if (!hasSmsPermissions()) {
             requestPermissions(
-                arrayOf(Manifest.permission.RECEIVE_SMS),
-                RECEIVE_SMS_REQUEST_CODE
+                arrayOf(
+                    Manifest.permission.RECEIVE_SMS,
+                    Manifest.permission.READ_SMS,
+                    Manifest.permission.READ_CONTACTS
+                ),
+                SMS_PERMISSION_REQUEST_CODE
             )
+        } else {
+            SmsSyncScheduler.enqueueImmediate(this)
         }
     }
 
+    private fun hasSmsPermissions(): Boolean {
+        return checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+
     companion object {
-        private const val RECEIVE_SMS_REQUEST_CODE = 1001
+        private const val SMS_PERMISSION_REQUEST_CODE = 1001
     }
 }

@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">SMS Sync</string>
     <string name="endpoint_label">Posting to: %1$s</string>
-    <string name="status_ready">Ready. Incoming SMS messages will be forwarded automatically.</string>
-    <string name="status_permission_required">SMS receive permission is required before messages can be synchronized.</string>
-    <string name="permission_request">Grant SMS Permission</string>
-    <string name="permission_granted">Permission Granted</string>
+    <string name="status_ready">Ready. Old, sent, and incoming SMS messages will sync in the background.</string>
+    <string name="status_permission_required">SMS receive/read permissions are required. Contacts permission adds names and emails when available.</string>
+    <string name="permission_request">Grant Sync Permissions</string>
+    <string name="permission_granted">Permissions Granted</string>
 </resources>
