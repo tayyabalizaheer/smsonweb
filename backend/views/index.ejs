@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="feed-header">
+        <div>
+          <p class="eyebrow">One-way sync</p>
+          <h1>SMS Feed</h1>
+        </div>
+        <span class="message-count"><%= messages.length %> messages</span>
+      </header>
+
+      <% if (messages.length === 0) { %>
+        <section class="empty-state" aria-label="No messages">
+          <h2>No synced messages yet</h2>
+          <p>Incoming SMS messages posted by the Android client will appear here.</p>
+        </section>
+      <% } else { %>
+        <section class="message-list" aria-label="Synced SMS messages">
+          <% messages.forEach((message) => { %>
+            <article class="message-item">
+              <div class="message-meta">
+                <strong><%= message.sender %></strong>
+                <time datetime="<%= new Date(message.received_at).toISOString() %>">
+                  <%= new Intl.DateTimeFormat('en', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                  }).format(new Date(message.received_at)) %>
+                </time>
+              </div>
+              <p><%= message.body %></p>
+            </article>
+          <% }) %>
+        </section>
+      <% } %>
+    </main>
+  </body>
+</html>

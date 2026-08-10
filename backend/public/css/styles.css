@@ -1,0 +1,143 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --text: #172026;
+  --muted: #64717d;
+  --border: #dfe5ea;
+  --accent: #0f766e;
+  --accent-soft: #d9f3ef;
+  --shadow: 0 16px 40px rgba(23, 32, 38, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(247, 248, 250, 0) 280px),
+    var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.page-shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.feed-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+}
+
+.message-count {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 8px 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.message-list {
+  display: grid;
+  gap: 14px;
+}
+
+.message-item,
+.empty-state {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.message-item {
+  padding: 18px;
+}
+
+.message-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.message-meta strong {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+.message-meta time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.message-item p,
+.empty-state p {
+  margin-bottom: 0;
+  color: #27343b;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  padding: 32px;
+}
+
+.empty-state h1,
+.empty-state h2 {
+  margin-bottom: 10px;
+  font-size: 1.6rem;
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    width: min(100% - 24px, 920px);
+    padding: 24px 0;
+  }
+
+  .feed-header,
+  .message-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .message-count {
+    border-radius: 8px;
+  }
+}
