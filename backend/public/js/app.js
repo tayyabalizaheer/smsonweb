@@ -405,24 +405,73 @@
   }
 
   function updateNotificationButton() {
-    if (!notificationButton || !('Notification' in window)) {
+    if (!notificationButton) {
+      return;
+    }
+
+    notificationButton.disabled = false;
+    notificationButton.removeAttribute('title');
+
+    if (!('Notification' in window)) {
+      notificationButton.textContent = 'Unsupported';
+      notificationButton.disabled = true;
+      notificationButton.title = 'This browser does not support web notifications.';
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      notificationButton.textContent = 'Needs HTTPS';
+      notificationButton.disabled = true;
+      notificationButton.title = 'Notifications require HTTPS or localhost.';
       return;
     }
 
     if (Notification.permission === 'granted') {
-      notificationButton.textContent = 'Enabled';
-      notificationButton.disabled = true;
+      notificationButton.textContent = 'Test';
+      notificationButton.title = 'Send a test notification.';
       return;
     }
 
     if (Notification.permission === 'denied') {
       notificationButton.textContent = 'Blocked';
-      notificationButton.disabled = true;
+      notificationButton.title = 'Enable notifications in browser or system settings, then press this again.';
       return;
     }
 
-    notificationButton.textContent = 'Enable';
-    notificationButton.disabled = false;
+    notificationButton.textContent = 'Allow';
+    notificationButton.title = 'Ask this browser for notification permission.';
+  }
+
+  function displayNotification(title, options) {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then(function (registration) {
+          registration.showNotification(title, options);
+        })
+        .catch(function () {
+          new Notification(title, options);
+        });
+      return;
+    }
+
+    new Notification(title, options);
+  }
+
+  function showTestNotification() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      return;
+    }
+
+    displayNotification('SMS Sync notifications are on', {
+      body: 'New SMS alerts will appear here.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/maskable-512.png',
+      tag: 'sms-sync-test',
+      renotify: true,
+      data: {
+        url: '/'
+      }
+    });
   }
 
   function requestNotificationPermission() {
@@ -430,7 +479,25 @@
       return;
     }
 
-    Notification.requestPermission().then(updateNotificationButton);
+    if (Notification.permission === 'granted') {
+      showTestNotification();
+      updateNotificationButton();
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      window.alert('Notifications are blocked for this site. Enable them in your browser or system notification settings, then come back and press the notification button again.');
+      updateNotificationButton();
+      return;
+    }
+
+    Notification.requestPermission().then(function (permission) {
+      updateNotificationButton();
+
+      if (permission === 'granted') {
+        showTestNotification();
+      }
+    });
   }
 
   function getMessageTitle(message, count) {
@@ -461,18 +528,7 @@
       }
     };
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready
-        .then(function (registration) {
-          registration.showNotification(title, options);
-        })
-        .catch(function () {
-          new Notification(title, options);
-        });
-      return;
-    }
-
-    new Notification(title, options);
+    displayNotification(title, options);
   }
 
   function fetchMessageNotifications() {

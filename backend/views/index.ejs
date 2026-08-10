@@ -24,10 +24,9 @@
       <aside class="conversation-panel" aria-label="Conversations">
         <header class="app-header">
           <div class="app-title">
-            <p class="eyebrow">SMS Sync</p>
             <h1>
               <span class="status-dot <%= device.lastPingAt && (Date.now() - new Date(device.lastPingAt).getTime() <= 120000) ? 'is-online' : 'is-offline' %>" aria-hidden="true"></span>
-              <span>Messages</span>
+              <span>SMS SYNC</span>
             </h1>
           </div>
           <button class="settings-button" type="button" aria-label="Open settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsPanel">
@@ -118,15 +117,6 @@
                   <strong><%= conversation.displayName %></strong>
                   <em><%= conversation.contactEmail || conversation.address %></em>
                   <small><%= conversation.latestMessage.body %></small>
-                </span>
-                <span class="conversation-stats">
-                  <time datetime="<%= new Date(conversation.latestMessage.messageAt).toISOString() %>">
-                    <%= new Intl.DateTimeFormat('en', {
-                      month: 'short',
-                      day: 'numeric'
-                    }).format(new Date(conversation.latestMessage.messageAt)) %>
-                  </time>
-                  <small><%= conversation.receivedCount %> in / <%= conversation.sentCount %> out</small>
                 </span>
               </a>
             <% }) %>
