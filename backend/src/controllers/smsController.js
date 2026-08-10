@@ -7,6 +7,31 @@ const MAX_CONTACT_NAME_LENGTH = 160;
 const MAX_CONTACT_EMAIL_LENGTH = 254;
 const VALID_DIRECTIONS = new Set(['received', 'sent']);
 
+const serializeMessage = (message) => {
+  return {
+    id: message.id.toString(),
+    address: message.address,
+    contactName: message.contactName,
+    contactEmail: message.contactEmail,
+    direction: message.direction,
+    body: message.body,
+    messageAt: message.messageAt.toISOString(),
+    syncedAt: message.syncedAt.toISOString()
+  };
+};
+
+const serializeConversation = (conversation) => {
+  return {
+    address: conversation.address,
+    displayName: conversation.displayName,
+    contactEmail: conversation.contactEmail,
+    messageCount: conversation.messageCount,
+    sentCount: conversation.sentCount,
+    receivedCount: conversation.receivedCount,
+    latestMessage: serializeMessage(conversation.latestMessage)
+  };
+};
+
 const normalizeSmsPayload = (payload) => {
   const address = typeof payload.address === 'string'
     ? payload.address.trim()
@@ -136,56 +161,12 @@ const storeSmsBatch = async (req, res, next) => {
 
 const renderSmsFeed = async (req, res, next) => {
   try {
-    const messages = await messageModel.findAllMessages();
-    const conversationsByAddress = new Map();
-
-    for (const message of messages) {
-      const conversation = conversationsByAddress.get(message.address) || {
-        address: message.address,
-        displayName: message.contactName || message.address,
-        contactEmail: message.contactEmail,
-        messages: [],
-        latestMessage: message,
-        sentCount: 0,
-        receivedCount: 0
-      };
-
-      conversation.messages.push(message);
-
-      if (message.direction === 'sent') {
-        conversation.sentCount += 1;
-      } else {
-        conversation.receivedCount += 1;
-      }
-
-      conversationsByAddress.set(message.address, conversation);
-    }
-
-    const conversations = Array.from(conversationsByAddress.values())
-      .sort((a, b) => b.latestMessage.messageAt - a.latestMessage.messageAt);
-    const hasExplicitSelection = typeof req.query.address === 'string' && req.query.address.trim() !== '';
-    const selectedAddress = hasExplicitSelection ? req.query.address : conversations[0]?.address;
-    const selectedConversation = conversations.find((conversation) => {
-      return conversation.address === selectedAddress;
-    }) || conversations[0] || null;
-    const selectedMessages = selectedConversation
-      ? [...selectedConversation.messages].sort((a, b) => a.messageAt - b.messageAt)
-      : [];
-    const lastSyncedAt = messages.reduce((latest, message) => {
-      if (!latest || message.syncedAt > latest) {
-        return message.syncedAt;
-      }
-
-      return latest;
-    }, null);
+    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries();
 
     return res.render('index', {
       title: 'SMS Messenger',
       conversations,
-      selectedConversation,
-      selectedMessages,
-      hasExplicitSelection,
-      totalMessages: messages.length,
+      totalMessages,
       lastSyncedAt
     });
   } catch (err) {
@@ -194,8 +175,51 @@ const renderSmsFeed = async (req, res, next) => {
   }
 };
 
+const listConversations = async (req, res, next) => {
+  try {
+    const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries();
+
+    return res.json({
+      conversations: conversations.map(serializeConversation),
+      totalMessages,
+      lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null
+    });
+  } catch (err) {
+    console.error('Failed to load conversations:', err);
+    return next(err);
+  }
+};
+
+const listMessages = async (req, res, next) => {
+  const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
+
+  if (!address) {
+    return res.status(400).json({ error: 'address is required.' });
+  }
+
+  try {
+    const result = await messageModel.findMessagesByAddress({
+      address,
+      limit: req.query.limit,
+      beforeMessageAt: req.query.beforeMessageAt,
+      beforeId: req.query.beforeId
+    });
+
+    return res.json({
+      messages: result.messages.map(serializeMessage),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor
+    });
+  } catch (err) {
+    console.error('Failed to load messages:', err);
+    return next(err);
+  }
+};
+
 module.exports = {
   storeSms,
   storeSmsBatch,
-  renderSmsFeed
+  renderSmsFeed,
+  listConversations,
+  listMessages
 };

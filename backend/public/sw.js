@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sms-sync-v2';
+const CACHE_NAME = 'sms-sync-v3';
 const STATIC_ASSETS = [
   '/offline.html',
   '/css/styles.css',
@@ -44,6 +44,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -52,7 +57,11 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put('/', copy));
           return response;
         })
-        .catch(() => caches.match('/') || caches.match('/offline.html'))
+        .catch(() => {
+          return caches.match('/').then((cached) => {
+            return cached || caches.match('/offline.html');
+          });
+        })
     );
     return;
   }

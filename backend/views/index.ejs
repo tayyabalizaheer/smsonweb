@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/css/styles.css">
   </head>
   <body>
-    <main class="messenger-shell <%= hasExplicitSelection ? 'is-thread-open' : '' %>">
+    <main class="messenger-shell" data-thread-address="">
       <aside class="conversation-panel" aria-label="Conversations">
         <header class="app-header">
           <div>
@@ -50,8 +50,12 @@
         <% } else { %>
           <nav class="conversation-list">
             <% conversations.forEach((conversation) => { %>
-              <% const active = selectedConversation && conversation.address === selectedConversation.address; %>
-              <a class="conversation-link <%= active ? 'is-active' : '' %>" href="/?address=<%= encodeURIComponent(conversation.address) %>">
+              <a
+                class="conversation-link"
+                href="/?address=<%= encodeURIComponent(conversation.address) %>"
+                data-address="<%= conversation.address %>"
+                data-display-name="<%= conversation.displayName %>"
+                data-contact-email="<%= conversation.contactEmail || '' %>">
                 <span class="avatar" aria-hidden="true"><%= conversation.displayName.slice(0, 1).toUpperCase() %></span>
                 <span class="conversation-copy">
                   <strong><%= conversation.displayName %></strong>
@@ -74,44 +78,24 @@
       </aside>
 
       <section class="thread-panel" aria-label="Selected conversation">
-        <% if (!selectedConversation) { %>
+        <header class="thread-header is-empty">
+          <a class="thread-back" href="/" aria-label="Back to contacts">
+            <span aria-hidden="true">&larr;</span>
+            <strong>Back</strong>
+          </a>
+          <span class="avatar large" aria-hidden="true">#</span>
+          <div>
+            <h2>Select a contact</h2>
+            <p>Choose a conversation to load the latest messages.</p>
+          </div>
+        </header>
+
+        <div class="message-thread" data-empty="true">
           <div class="thread-empty">
             <h2>Select a conversation</h2>
-            <p>Synced SMS conversations will be shown here.</p>
+            <p>Only the contact list loads first. Messages load when you open a contact.</p>
           </div>
-        <% } else { %>
-          <header class="thread-header">
-            <a class="thread-back" href="/" aria-label="Back to contacts">
-              <span aria-hidden="true">&larr;</span>
-              <strong>Back</strong>
-            </a>
-            <span class="avatar large" aria-hidden="true"><%= selectedConversation.displayName.slice(0, 1).toUpperCase() %></span>
-            <div>
-              <h2><%= selectedConversation.displayName %></h2>
-              <p><%= selectedConversation.contactEmail || selectedConversation.address %></p>
-            </div>
-          </header>
-
-          <div class="message-thread">
-            <% selectedMessages.forEach((message) => { %>
-              <% const isSent = message.direction === 'sent'; %>
-              <article class="bubble-row <%= isSent ? 'is-sent' : 'is-received' %>">
-                <div class="message-bubble">
-                  <p><%= message.body %></p>
-                  <footer>
-                    <span><%= isSent ? 'Sent' : 'Received' %></span>
-                    <time datetime="<%= new Date(message.messageAt).toISOString() %>">
-                      <%= new Intl.DateTimeFormat('en', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short'
-                      }).format(new Date(message.messageAt)) %>
-                    </time>
-                  </footer>
-                </div>
-              </article>
-            <% }) %>
-          </div>
-        <% } %>
+        </div>
       </section>
     </main>
     <script src="/js/app.js" defer></script>
