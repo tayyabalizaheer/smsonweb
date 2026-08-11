@@ -122,6 +122,50 @@ const findExistingIdentityKeys = async (messages) => {
   return new Set(existing.map(getMessageIdentityKey));
 };
 
+const insertOrUpdateMessages = async (messages) => {
+  if (messages.length === 0) {
+    return 0;
+  }
+
+  let affectedRows = 0;
+
+  for (let index = 0; index < messages.length; index += 250) {
+    const batch = messages.slice(index, index + 250);
+
+    affectedRows += await prisma.$executeRaw`
+      INSERT INTO messages (
+        device_message_id,
+        device_code,
+        sender,
+        contact_name,
+        contact_email,
+        direction,
+        body,
+        message_at
+      )
+      VALUES ${Prisma.join(batch.map((message) => Prisma.sql`(
+        ${message.deviceMessageId},
+        ${message.deviceCode},
+        ${message.address},
+        ${message.contactName},
+        ${message.contactEmail},
+        ${message.direction},
+        ${message.body},
+        ${message.messageAt}
+      )`))}
+      ON DUPLICATE KEY UPDATE
+        sender = VALUES(sender),
+        contact_name = VALUES(contact_name),
+        contact_email = VALUES(contact_email),
+        direction = VALUES(direction),
+        body = VALUES(body),
+        message_at = VALUES(message_at)
+    `;
+  }
+
+  return affectedRows;
+};
+
 const findDeletedIdentityKeys = async (messages) => {
   const keys = Array.from(new Set(messages.map(getMessageIdentityKey).filter(Boolean)));
 
@@ -253,18 +297,10 @@ const createMessage = async (message) => {
   const uniqueWhere = getUniqueMessageWhere(message);
 
   if (uniqueWhere) {
-    return prisma.message.upsert({
-      where: uniqueWhere,
-      update: {
-        deviceCode: message.deviceCode,
-        address: message.address,
-        contactName: message.contactName,
-        contactEmail: message.contactEmail,
-        direction: message.direction,
-        body: message.body,
-        messageAt: message.messageAt
-      },
-      create: message
+    await insertOrUpdateMessages([message]);
+
+    return prisma.message.findUnique({
+      where: uniqueWhere
     });
   }
 
@@ -311,31 +347,7 @@ const createMessages = async (messages) => {
   }
 
   const existingKeys = await findExistingIdentityKeys(syncableMessages);
-  const operations = syncableMessages.map((message) => {
-    const uniqueWhere = getUniqueMessageWhere(message);
-
-    if (uniqueWhere) {
-      return prisma.message.upsert({
-        where: uniqueWhere,
-        update: {
-          deviceCode: message.deviceCode,
-          address: message.address,
-          contactName: message.contactName,
-          contactEmail: message.contactEmail,
-          direction: message.direction,
-          body: message.body,
-          messageAt: message.messageAt
-        },
-        create: message
-      });
-    }
-
-    return prisma.message.create({
-      data: message
-    });
-  });
-
-  await prisma.$transaction(operations);
+  await insertOrUpdateMessages(syncableMessages);
 
   return {
     count: syncableMessages.length,
