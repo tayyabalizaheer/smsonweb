@@ -949,23 +949,30 @@ h1 {
   .pair-shell,
   .offline-shell {
     position: fixed;
-    top: 100dvh;
+    top: 0;
     left: 0;
     width: 100dvh;
     height: 100dvw;
     min-height: 0;
     max-height: none;
     margin: 0;
-    transform: rotate(-90deg);
     transform-origin: top left;
   }
 
-  html.is-landscape-secondary .messenger-shell,
-  html.is-landscape-secondary .pair-shell,
-  html.is-landscape-secondary .offline-shell {
+  html.is-landscape-90 .messenger-shell,
+  html.is-landscape-90 .pair-shell,
+  html.is-landscape-90 .offline-shell {
     top: 0;
     left: 100dvw;
     transform: rotate(90deg);
+  }
+
+  html.is-landscape-270 .messenger-shell,
+  html.is-landscape-270 .pair-shell,
+  html.is-landscape-270 .offline-shell {
+    top: 100dvh;
+    left: 0;
+    transform: rotate(-90deg);
   }
 
   .messenger-shell {

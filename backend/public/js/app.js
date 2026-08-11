@@ -81,9 +81,21 @@
     var root = document.documentElement;
     var isLandscape = window.innerWidth > window.innerHeight;
     var angle = getOrientationAngle();
-    var isSecondaryLandscape = isLandscape && angle === 270;
 
-    root.classList.toggle('is-landscape-secondary', isSecondaryLandscape);
+    root.classList.remove('is-landscape-90', 'is-landscape-270');
+
+    if (!isLandscape) {
+      return;
+    }
+
+    if (angle === 90) {
+      root.classList.add('is-landscape-90');
+      return;
+    }
+
+    if (angle === 270) {
+      root.classList.add('is-landscape-270');
+    }
   }
 
   function setupPortraitOrientationLock() {
@@ -96,6 +108,7 @@
           lockPortraitOrientation();
           updatePortraitFallbackDirection();
         }, 120);
+        window.setTimeout(updatePortraitFallbackDirection, 500);
       });
     });
 
