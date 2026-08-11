@@ -65,18 +65,44 @@
     screen.orientation.lock('portrait-primary').catch(function () {});
   }
 
+  function getOrientationAngle() {
+    var angle = 0;
+
+    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+      angle = screen.orientation.angle;
+    } else if (typeof window.orientation === 'number') {
+      angle = window.orientation;
+    }
+
+    return ((angle % 360) + 360) % 360;
+  }
+
+  function updatePortraitFallbackDirection() {
+    var root = document.documentElement;
+    var isLandscape = window.innerWidth > window.innerHeight;
+    var angle = getOrientationAngle();
+    var isSecondaryLandscape = isLandscape && angle === 270;
+
+    root.classList.toggle('is-landscape-secondary', isSecondaryLandscape);
+  }
+
   function setupPortraitOrientationLock() {
     lockPortraitOrientation();
+    updatePortraitFallbackDirection();
 
     ['orientationchange', 'resize'].forEach(function (eventName) {
       window.addEventListener(eventName, function () {
-        window.setTimeout(lockPortraitOrientation, 120);
+        window.setTimeout(function () {
+          lockPortraitOrientation();
+          updatePortraitFallbackDirection();
+        }, 120);
       });
     });
 
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) {
         lockPortraitOrientation();
+        updatePortraitFallbackDirection();
       }
     });
   }

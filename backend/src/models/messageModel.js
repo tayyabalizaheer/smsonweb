@@ -497,7 +497,7 @@ const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
 
     return {
       address: conversation.address,
-      displayName: latestMessage?.contactName || conversation.address,
+      displayName: latestMessage?.contactName || latestMessage?.address || conversation.address,
       contactEmail: latestMessage?.contactEmail || null,
       latestMessage,
       unreadCount: unreadCounts.get(conversation.address) || 0,
