@@ -35,7 +35,7 @@
     <string name="unpair_slot">Unpair Slot %1$d</string>
     <string name="health_channel_name">SMS Sync health</string>
     <string name="health_notification_title">SMS Sync is online</string>
-    <string name="health_notification_text">Sending device health every 30 seconds.</string>
+    <string name="health_notification_text">Keeping device online and syncing SMS in the background.</string>
     <string name="status_ready">Ready. Old, sent, and incoming SMS messages will sync in the background.</string>
     <string name="status_permission_required">SMS receive/read permissions are required. Contacts permission adds names and emails when available.</string>
     <string name="permission_request">Grant Sync Permissions</string>

@@ -1,5 +1,6 @@
 const pushConfig = require('../config/webPush');
 const pushSubscriptionModel = require('../models/pushSubscriptionModel');
+const pushNotificationService = require('../services/pushNotificationService');
 
 const getPublicKey = (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -54,8 +55,33 @@ const unsubscribe = async (req, res, next) => {
   }
 };
 
+const test = async (req, res, next) => {
+  try {
+    const result = await pushNotificationService.sendTestNotification(req.device.code);
+
+    if (!result.configured) {
+      return res.status(503).json({ error: 'Push notifications are not configured on this server.' });
+    }
+
+    if (result.sent === 0) {
+      return res.status(404).json({
+        error: 'No active push subscriptions were found for this paired browser.'
+      });
+    }
+
+    return res.json({
+      sent: result.sent,
+      failed: result.failed
+    });
+  } catch (err) {
+    console.error('Failed to send test push notification:', err);
+    return next(err);
+  }
+};
+
 module.exports = {
   getPublicKey,
   subscribe,
-  unsubscribe
+  unsubscribe,
+  test
 };

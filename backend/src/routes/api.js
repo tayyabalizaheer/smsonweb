@@ -18,8 +18,11 @@ router.get('/device/status', deviceController.requireWebDevice, deviceController
 router.get('/push/public-key', deviceController.requireWebDevice, pushController.getPublicKey);
 router.post('/push/subscribe', deviceController.requireWebDevice, pushController.subscribe);
 router.post('/push/unsubscribe', deviceController.requireWebDevice, pushController.unsubscribe);
+router.post('/push/test', deviceController.requireWebDevice, pushController.test);
 router.get('/conversations', deviceController.requireWebDevice, smsController.listConversations);
+router.delete('/conversations', deviceController.requireWebDevice, smsController.deleteConversation);
 router.get('/messages', deviceController.requireWebDevice, smsController.listMessages);
+router.delete('/messages/:id', deviceController.requireWebDevice, smsController.deleteMessage);
 router.get('/messages/notifications', deviceController.requireWebDevice, smsController.listMessageNotifications);
 
 module.exports = router;

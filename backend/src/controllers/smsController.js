@@ -1,5 +1,6 @@
 const messageModel = require('../models/messageModel');
 const pushNotificationService = require('../services/pushNotificationService');
+const { getSessionId } = require('./deviceController');
 
 const MAX_ADDRESS_LENGTH = 64;
 const MAX_BODY_LENGTH = 65535;
@@ -29,6 +30,7 @@ const serializeConversation = (conversation) => {
     messageCount: conversation.messageCount,
     sentCount: conversation.sentCount,
     receivedCount: conversation.receivedCount,
+    unreadCount: conversation.unreadCount || 0,
     latestMessage: serializeMessage(conversation.latestMessage)
   };
 };
@@ -115,6 +117,13 @@ const storeSms = async (req, res, next) => {
     const existed = await messageModel.messageExists(value);
     const message = await messageModel.createMessage(value);
 
+    if (!message) {
+      return res.status(202).json({
+        ignored: true,
+        reason: 'message was deleted from web'
+      });
+    }
+
     if (!existed) {
       await pushNotificationService.notifyNewMessages({
         deviceCode: message.deviceCode,
@@ -182,7 +191,8 @@ const storeSmsBatch = async (req, res, next) => {
 const renderSmsFeed = async (req, res, next) => {
   try {
     const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries({
-      deviceCode: req.device.code
+      deviceCode: req.device.code,
+      sessionId: getSessionId(req)
     });
 
     return res.render('index', {
@@ -201,7 +211,8 @@ const renderSmsFeed = async (req, res, next) => {
 const listConversations = async (req, res, next) => {
   try {
     const { conversations, totalMessages, lastSyncedAt } = await messageModel.findConversationSummaries({
-      deviceCode: req.device.code
+      deviceCode: req.device.code,
+      sessionId: getSessionId(req)
     });
 
     return res.json({
@@ -226,14 +237,24 @@ const listMessages = async (req, res, next) => {
     const result = await messageModel.findMessagesByAddress({
       address,
       deviceCode: req.device.code,
+      sessionId: getSessionId(req),
       limit: req.query.limit,
       beforeMessageAt: req.query.beforeMessageAt,
       beforeId: req.query.beforeId
     });
 
+    if (!req.query.beforeMessageAt && !req.query.beforeId) {
+      await messageModel.markConversationRead({
+        address,
+        deviceCode: req.device.code,
+        sessionId: getSessionId(req)
+      });
+    }
+
     return res.json({
       messages: result.messages.map(serializeMessage),
       hasMore: result.hasMore,
+      unreadStartId: result.unreadStartId,
       nextCursor: result.nextCursor
     });
   } catch (err) {
@@ -260,11 +281,51 @@ const listMessageNotifications = async (req, res, next) => {
   }
 };
 
+const deleteMessage = async (req, res, next) => {
+  try {
+    const result = await messageModel.deleteMessageById({
+      id: req.params.id,
+      deviceCode: req.device.code
+    });
+
+    return res.json({
+      deleted: result.count
+    });
+  } catch (err) {
+    console.error('Failed to delete message:', err);
+    return next(err);
+  }
+};
+
+const deleteConversation = async (req, res, next) => {
+  const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
+
+  if (!address) {
+    return res.status(400).json({ error: 'address is required.' });
+  }
+
+  try {
+    const result = await messageModel.deleteConversationByAddress({
+      address,
+      deviceCode: req.device.code
+    });
+
+    return res.json({
+      deleted: result.count
+    });
+  } catch (err) {
+    console.error('Failed to delete conversation:', err);
+    return next(err);
+  }
+};
+
 module.exports = {
   storeSms,
   storeSmsBatch,
   renderSmsFeed,
   listConversations,
   listMessages,
-  listMessageNotifications
+  listMessageNotifications,
+  deleteMessage,
+  deleteConversation
 };

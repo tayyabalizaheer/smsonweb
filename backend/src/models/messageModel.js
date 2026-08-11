@@ -1,3 +1,4 @@
+const { Prisma } = require('@prisma/client');
 const prisma = require('../config/prisma');
 
 const getUniqueMessageWhere = (message) => {
@@ -44,6 +45,99 @@ const findExistingIdentityKeys = async (messages) => {
   return new Set(existing.map(getMessageIdentityKey));
 };
 
+const findDeletedIdentityKeys = async (messages) => {
+  const keys = Array.from(new Set(messages.map(getMessageIdentityKey).filter(Boolean)));
+
+  if (keys.length === 0) {
+    return new Set();
+  }
+
+  const rows = await prisma.$queryRaw`
+    SELECT CONCAT(device_code, ':', device_message_id) AS identityKey
+    FROM deleted_messages
+    WHERE CONCAT(device_code, ':', device_message_id) IN (${Prisma.join(keys)})
+  `;
+
+  return new Set(rows.map((row) => row.identityKey));
+};
+
+const tombstoneMessages = async (messages) => {
+  const rows = messages.filter((message) => message.deviceCode && message.deviceMessageId);
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  for (let index = 0; index < rows.length; index += 500) {
+    const batch = rows.slice(index, index + 500);
+
+    await prisma.$executeRaw`
+      INSERT INTO deleted_messages (device_code, device_message_id, address)
+      VALUES ${Prisma.join(batch.map((message) => Prisma.sql`(${message.deviceCode}, ${message.deviceMessageId}, ${message.address})`))}
+      ON DUPLICATE KEY UPDATE
+        address = VALUES(address),
+        deleted_at = CURRENT_TIMESTAMP(0)
+    `;
+  }
+};
+
+const findUnreadCounts = async ({ deviceCode, sessionId }) => {
+  if (!deviceCode || !sessionId) {
+    return new Map();
+  }
+
+  const rows = await prisma.$queryRaw`
+    SELECT
+      m.sender AS address,
+      COUNT(*) AS unreadCount
+    FROM messages m
+    LEFT JOIN web_read_states r
+      ON r.device_code = m.device_code
+      AND r.session_id = ${sessionId}
+      AND r.address = m.sender
+    WHERE m.device_code = ${deviceCode}
+      AND m.direction = 'received'
+      AND (r.last_read_at IS NULL OR m.message_at > r.last_read_at)
+    GROUP BY m.sender
+  `;
+
+  return new Map(rows.map((row) => [row.address, Number(row.unreadCount)]));
+};
+
+const findLastReadAt = async ({ deviceCode, sessionId, address }) => {
+  if (!deviceCode || !sessionId || !address) {
+    return null;
+  }
+
+  const rows = await prisma.$queryRaw`
+    SELECT last_read_at AS lastReadAt
+    FROM web_read_states
+    WHERE device_code = ${deviceCode}
+      AND session_id = ${sessionId}
+      AND address = ${address}
+    LIMIT 1
+  `;
+
+  return rows[0]?.lastReadAt || null;
+};
+
+const markConversationRead = async ({ deviceCode, sessionId, address }) => {
+  if (!deviceCode || !sessionId || !address) {
+    return;
+  }
+
+  await prisma.$executeRaw`
+    INSERT INTO web_read_states (device_code, session_id, address, last_read_at)
+    SELECT ${deviceCode}, ${sessionId}, ${address}, COALESCE(MAX(message_at), CURRENT_TIMESTAMP(0))
+    FROM messages
+    WHERE device_code = ${deviceCode}
+      AND sender = ${address}
+    ON DUPLICATE KEY UPDATE
+      last_read_at = VALUES(last_read_at),
+      updated_at = CURRENT_TIMESTAMP(0)
+  `;
+};
+
 const messageExists = async (message) => {
   const uniqueWhere = getUniqueMessageWhere(message);
 
@@ -62,6 +156,12 @@ const messageExists = async (message) => {
 };
 
 const createMessage = async (message) => {
+  const deletedKeys = await findDeletedIdentityKeys([message]);
+
+  if (deletedKeys.has(getMessageIdentityKey(message))) {
+    return null;
+  }
+
   const uniqueWhere = getUniqueMessageWhere(message);
 
   if (uniqueWhere) {
@@ -107,8 +207,23 @@ const createMessages = async (messages) => {
     return map;
   }, new Map()).values());
 
-  const existingKeys = await findExistingIdentityKeys(dedupedMessages);
-  const operations = dedupedMessages.map((message) => {
+  const deletedKeys = await findDeletedIdentityKeys(dedupedMessages);
+  const syncableMessages = dedupedMessages.filter((message) => {
+    const key = getMessageIdentityKey(message);
+
+    return !key || !deletedKeys.has(key);
+  });
+
+  if (syncableMessages.length === 0) {
+    return {
+      count: 0,
+      createdMessages: [],
+      skippedDeleted: dedupedMessages.length
+    };
+  }
+
+  const existingKeys = await findExistingIdentityKeys(syncableMessages);
+  const operations = syncableMessages.map((message) => {
     const uniqueWhere = getUniqueMessageWhere(message);
 
     if (uniqueWhere) {
@@ -135,16 +250,80 @@ const createMessages = async (messages) => {
   await prisma.$transaction(operations);
 
   return {
-    count: dedupedMessages.length,
-    createdMessages: dedupedMessages.filter((message) => {
+    count: syncableMessages.length,
+    createdMessages: syncableMessages.filter((message) => {
       const key = getMessageIdentityKey(message);
 
       return !key || !existingKeys.has(key);
-    })
+    }),
+    skippedDeleted: dedupedMessages.length - syncableMessages.length
   };
 };
 
-const findConversationSummaries = async ({ deviceCode } = {}) => {
+const parseMessageId = (id) => {
+  try {
+    return BigInt(id);
+  } catch (err) {
+    return null;
+  }
+};
+
+const deleteMessageById = async ({ id, deviceCode }) => {
+  const messageId = parseMessageId(id);
+
+  if (!messageId) {
+    return { count: 0 };
+  }
+
+  const message = await prisma.message.findFirst({
+    where: {
+      id: messageId,
+      ...(deviceCode ? { deviceCode } : {})
+    },
+    select: {
+      id: true,
+      deviceCode: true,
+      deviceMessageId: true,
+      address: true
+    }
+  });
+
+  if (!message) {
+    return { count: 0 };
+  }
+
+  await tombstoneMessages([message]);
+
+  return prisma.message.deleteMany({
+    where: {
+      id: messageId,
+      ...(deviceCode ? { deviceCode } : {})
+    }
+  });
+};
+
+const deleteConversationByAddress = async ({ address, deviceCode }) => {
+  const where = {
+    address,
+    ...(deviceCode ? { deviceCode } : {})
+  };
+  const messages = await prisma.message.findMany({
+    where,
+    select: {
+      deviceCode: true,
+      deviceMessageId: true,
+      address: true
+    }
+  });
+
+  await tombstoneMessages(messages);
+
+  return prisma.message.deleteMany({
+    where
+  });
+};
+
+const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
   const where = deviceCode ? { deviceCode } : {};
   const [totalMessages, lastSync, groupedConversations, groupedDirections] = await Promise.all([
     prisma.message.count({ where }),
@@ -174,6 +353,7 @@ const findConversationSummaries = async ({ deviceCode } = {}) => {
   ]);
 
   const directionCounts = new Map();
+  const unreadCounts = await findUnreadCounts({ deviceCode, sessionId });
 
   for (const item of groupedDirections) {
     const counts = directionCounts.get(item.address) || { sent: 0, received: 0 };
@@ -205,6 +385,7 @@ const findConversationSummaries = async ({ deviceCode } = {}) => {
       displayName: latestMessage?.contactName || conversation.address,
       contactEmail: latestMessage?.contactEmail || null,
       latestMessage,
+      unreadCount: unreadCounts.get(conversation.address) || 0,
       messageCount: conversation._count._all,
       sentCount: counts.sent,
       receivedCount: counts.received
@@ -222,7 +403,7 @@ const findConversationSummaries = async ({ deviceCode } = {}) => {
   };
 };
 
-const findMessagesByAddress = async ({ address, deviceCode, limit = 100, beforeMessageAt, beforeId }) => {
+const findMessagesByAddress = async ({ address, deviceCode, sessionId, limit = 100, beforeMessageAt, beforeId }) => {
   const take = Math.min(Math.max(Number(limit) || 100, 1), 100);
   const where = {
     address,
@@ -263,11 +444,17 @@ const findMessagesByAddress = async ({ address, deviceCode, limit = 100, beforeM
   });
   const hasMore = rows.length > take;
   const pageRows = rows.slice(0, take);
+  const messages = pageRows.reverse();
   const oldest = pageRows[pageRows.length - 1] || null;
+  const lastReadAt = await findLastReadAt({ deviceCode, sessionId, address });
+  const firstUnreadMessage = messages.find((message) => {
+    return message.direction === 'received' && (!lastReadAt || message.messageAt > lastReadAt);
+  });
 
   return {
-    messages: pageRows.reverse(),
+    messages,
     hasMore,
+    unreadStartId: firstUnreadMessage ? firstUnreadMessage.id.toString() : null,
     nextCursor: hasMore && oldest
       ? {
         beforeMessageAt: oldest.messageAt.toISOString(),
@@ -317,6 +504,9 @@ module.exports = {
   messageExists,
   createMessage,
   createMessages,
+  deleteMessageById,
+  deleteConversationByAddress,
+  markConversationRead,
   findConversationSummaries,
   findMessagesByAddress,
   findMessagesSyncedAfter

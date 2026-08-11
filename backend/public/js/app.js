@@ -14,10 +14,15 @@
   var notificationButton = null;
   var updateButton = null;
   var updateStatus = null;
+  var undoToast = null;
+  var undoMessage = null;
+  var undoButton = null;
+  var pendingDelete = null;
   var availableVersion = '';
   var latestNotificationSync = '';
   var pushServerConfigured = true;
   var pushNotificationsEnabled = false;
+  var pushErrorMessage = '';
   var isRefreshingContacts = false;
   var currentAddress = '';
   var currentConversation = null;
@@ -40,6 +45,14 @@
 
   function getCurrentVersion() {
     return shell?.dataset.appVersion || 'unknown';
+  }
+
+  function lockPortraitOrientation() {
+    if (!screen.orientation || typeof screen.orientation.lock !== 'function') {
+      return;
+    }
+
+    screen.orientation.lock('portrait').catch(function () {});
   }
 
   function getNotificationStorageKey() {
@@ -77,6 +90,36 @@
     }).format(new Date(value));
   }
 
+  function formatRelativeTime(value) {
+    var date = new Date(value);
+    var diffSeconds = Math.max(1, Math.floor((Date.now() - date.getTime()) / 1000));
+    var units = [
+      { label: 'year', seconds: 31536000 },
+      { label: 'month', seconds: 2592000 },
+      { label: 'day', seconds: 86400 },
+      { label: 'hour', seconds: 3600 },
+      { label: 'min', seconds: 60 }
+    ];
+
+    for (var index = 0; index < units.length; index += 1) {
+      var unit = units[index];
+
+      if (diffSeconds >= unit.seconds) {
+        var valueCount = Math.floor(diffSeconds / unit.seconds);
+        return valueCount + ' ' + unit.label + (valueCount > 1 && unit.label !== 'min' ? 's' : '') + ' ago';
+      }
+    }
+
+    return 'just now';
+  }
+
+  function getSecondaryText(conversation) {
+    var displayName = conversation.displayName || conversation.address || '';
+    var secondary = conversation.contactEmail || conversation.address || '';
+
+    return secondary && secondary !== displayName ? secondary : '';
+  }
+
   function scrollThreadToBottom() {
     if (!thread) {
       return;
@@ -97,7 +140,8 @@
         return {
           address: link.dataset.address || '',
           displayName: link.dataset.displayName || link.dataset.address || '',
-          contactEmail: link.dataset.contactEmail || ''
+          contactEmail: link.dataset.contactEmail || '',
+          latestMessageAt: link.dataset.latestMessageAt || ''
         };
       })
       .find(function (conversation) {
@@ -110,11 +154,15 @@
     var title = header.querySelector('h2');
     var subtitle = header.querySelector('p');
     var displayName = conversation.displayName || conversation.address;
+    var secondary = getSecondaryText(conversation);
+    var lastMessageText = conversation.latestMessageAt
+      ? 'Last message ' + formatRelativeTime(conversation.latestMessageAt)
+      : '';
 
     header.classList.remove('is-empty');
     avatar.textContent = displayName.slice(0, 1).toUpperCase();
     title.textContent = displayName;
-    subtitle.textContent = conversation.contactEmail || conversation.address;
+    subtitle.textContent = [secondary, lastMessageText].filter(Boolean).join(' - ');
   }
 
   function renderInitialLoader() {
@@ -147,13 +195,18 @@
       '<footer>',
       '<span>' + label + '</span>',
       '<time datetime="' + escapeHtml(message.messageAt) + '">' + escapeHtml(formatDateTime(message.messageAt)) + '</time>',
+      '<button class="message-delete-button" type="button" data-delete-message="' + escapeHtml(message.id) + '" aria-label="Delete message">Delete</button>',
       '</footer>',
       '</div>',
       '</article>'
     ].join('');
   }
 
-  function renderMessages(messages) {
+  function renderUnreadDivider() {
+    return '<div class="unread-divider" role="separator"><span>Unread</span></div>';
+  }
+
+  function renderMessages(messages, unreadStartId) {
     thread.dataset.empty = 'false';
 
     if (!messages.length) {
@@ -166,27 +219,43 @@
       return;
     }
 
-    thread.innerHTML = messages.map(renderMessage).join('');
+    var hasDivider = false;
+    thread.innerHTML = messages.map(function (message) {
+      if (!hasDivider && unreadStartId && message.id === unreadStartId) {
+        hasDivider = true;
+        return renderUnreadDivider() + renderMessage(message);
+      }
+
+      return renderMessage(message);
+    }).join('');
   }
 
   function renderConversationLink(conversation) {
     var displayName = conversation.displayName || conversation.address || 'Unknown';
+    var secondary = getSecondaryText(conversation);
     var latestBody = conversation.latestMessage?.body || '';
+    var latestMessageAt = conversation.latestMessage?.messageAt || '';
+    var unreadCount = Number(conversation.unreadCount) || 0;
 
     return [
+      '<div class="conversation-item" data-address="' + escapeHtml(conversation.address || '') + '">',
+      '<button class="conversation-delete-button" type="button" data-delete-conversation="' + escapeHtml(conversation.address || '') + '">Delete</button>',
       '<a',
       ' class="conversation-link"',
       ' href="/?address=' + encodeURIComponent(conversation.address || '') + '"',
       ' data-address="' + escapeHtml(conversation.address || '') + '"',
       ' data-display-name="' + escapeHtml(displayName) + '"',
-      ' data-contact-email="' + escapeHtml(conversation.contactEmail || '') + '">',
+      ' data-contact-email="' + escapeHtml(conversation.contactEmail || '') + '"',
+      ' data-latest-message-at="' + escapeHtml(latestMessageAt) + '">',
       '<span class="avatar" aria-hidden="true">' + escapeHtml(displayName.slice(0, 1).toUpperCase()) + '</span>',
       '<span class="conversation-copy">',
       '<strong>' + escapeHtml(displayName) + '</strong>',
-      '<em>' + escapeHtml(conversation.contactEmail || conversation.address || '') + '</em>',
+      secondary ? '<em>' + escapeHtml(secondary) + '</em>' : '',
       '<small>' + escapeHtml(latestBody) + '</small>',
       '</span>',
-      '</a>'
+      unreadCount > 0 ? '<span class="unread-badge" data-unread-badge>' + escapeHtml(unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '',
+      '</a>',
+      '</div>'
     ].join('');
   }
 
@@ -203,6 +272,17 @@
     links = Array.prototype.slice.call(document.querySelectorAll('.conversation-link'));
     setupConversationLinks();
     setActiveLink(currentAddress);
+  }
+
+  function clearUnreadBadge(address) {
+    var link = links.find(function (item) {
+      return item.dataset.address === address;
+    });
+    var badge = link?.querySelector('[data-unread-badge]');
+
+    if (badge) {
+      badge.remove();
+    }
   }
 
   function showOlderLoader() {
@@ -252,6 +332,90 @@
 
       return response.json();
     });
+  }
+
+  function deleteMessageRequest(id) {
+    return fetch('/api/messages/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json'
+      }
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('Message delete failed');
+      }
+
+      return response.json();
+    });
+  }
+
+  function deleteConversationRequest(address) {
+    var params = new URLSearchParams({ address: address });
+
+    return fetch('/api/conversations?' + params.toString(), {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json'
+      }
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('Conversation delete failed');
+      }
+
+      return response.json();
+    });
+  }
+
+  function hideUndoToast() {
+    if (undoToast) {
+      undoToast.hidden = true;
+    }
+  }
+
+  function commitPendingDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+
+    var deleteJob = pendingDelete;
+    pendingDelete = null;
+    window.clearTimeout(deleteJob.timer);
+    hideUndoToast();
+
+    deleteJob.commit().catch(function () {
+      deleteJob.restore();
+      window.alert('Could not delete. Please try again.');
+    });
+  }
+
+  function scheduleUndoDelete(message, commit, restore) {
+    commitPendingDelete();
+
+    pendingDelete = {
+      commit: commit,
+      restore: restore,
+      timer: window.setTimeout(commitPendingDelete, 5000)
+    };
+
+    if (undoMessage) {
+      undoMessage.textContent = message;
+    }
+
+    if (undoToast) {
+      undoToast.hidden = false;
+    }
+  }
+
+  function undoPendingDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+
+    var deleteJob = pendingDelete;
+    pendingDelete = null;
+    window.clearTimeout(deleteJob.timer);
+    deleteJob.restore();
+    hideUndoToast();
   }
 
   function refreshConversationList() {
@@ -343,7 +507,12 @@
 
         hasMore = Boolean(data.hasMore);
         nextCursor = data.nextCursor || null;
-        renderMessages(data.messages || []);
+        if ((data.messages || []).length) {
+          currentConversation.latestMessageAt = data.messages[data.messages.length - 1].messageAt;
+          renderHeader(currentConversation);
+        }
+        renderMessages(data.messages || [], data.unreadStartId || null);
+        clearUnreadBadge(address);
         window.requestAnimationFrame(scrollThreadToBottom);
       })
       .catch(function (err) {
@@ -407,11 +576,138 @@
 
   function setupConversationLinks() {
     links.forEach(function (link) {
+      if (link.dataset.bound === 'true') {
+        return;
+      }
+
+      link.dataset.bound = 'true';
       link.addEventListener('click', function (event) {
         event.preventDefault();
         openConversation(link.dataset.address || '');
       });
     });
+  }
+
+  function deleteMessageWithUndo(button) {
+    var id = button.dataset.deleteMessage || '';
+    var row = button.closest('.bubble-row');
+
+    if (!id || !row || !window.confirm('Delete this message?')) {
+      return;
+    }
+
+    var parent = row.parentNode;
+    var nextSibling = row.nextSibling;
+
+    row.remove();
+    scheduleUndoDelete(
+      'Message deleted',
+      function () {
+        return deleteMessageRequest(id).then(function () {
+          refreshConversationList();
+        });
+      },
+      function () {
+        parent.insertBefore(row, nextSibling);
+      }
+    );
+  }
+
+  function deleteConversationWithUndo(address, item) {
+    if (!address || !item || !window.confirm('Delete this full thread?')) {
+      return;
+    }
+
+    var parent = item.parentNode;
+    var nextSibling = item.nextSibling;
+    var wasCurrent = currentAddress === address;
+
+    item.remove();
+
+    if (wasCurrent) {
+      closeConversation();
+    }
+
+    scheduleUndoDelete(
+      'Thread deleted',
+      function () {
+        return deleteConversationRequest(address).then(function () {
+          refreshConversationList();
+        });
+      },
+      function () {
+        parent.insertBefore(item, nextSibling);
+        links = Array.prototype.slice.call(document.querySelectorAll('.conversation-link'));
+        setupConversationLinks();
+        setActiveLink(currentAddress);
+      }
+    );
+  }
+
+  function setupMessageDeletes() {
+    thread.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-delete-message]');
+
+      if (button) {
+        event.preventDefault();
+        deleteMessageWithUndo(button);
+      }
+    });
+  }
+
+  function setupConversationDeletes() {
+    if (!conversationPanel) {
+      return;
+    }
+
+    conversationPanel.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-delete-conversation]');
+
+      if (!button) {
+        return;
+      }
+
+      event.preventDefault();
+      deleteConversationWithUndo(button.dataset.deleteConversation || '', button.closest('.conversation-item'));
+    });
+
+    var startX = 0;
+    var startY = 0;
+    var activeItem = null;
+
+    conversationPanel.addEventListener('touchstart', function (event) {
+      var link = event.target.closest('.conversation-link');
+
+      if (!link || !event.touches.length) {
+        return;
+      }
+
+      activeItem = link.closest('.conversation-item');
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+    }, { passive: true });
+
+    conversationPanel.addEventListener('touchend', function (event) {
+      if (!activeItem || !event.changedTouches.length) {
+        activeItem = null;
+        return;
+      }
+
+      var diffX = event.changedTouches[0].clientX - startX;
+      var diffY = event.changedTouches[0].clientY - startY;
+
+      if (Math.abs(diffX) > 48 && Math.abs(diffX) > Math.abs(diffY) * 1.4) {
+        Array.prototype.slice.call(document.querySelectorAll('.conversation-item.is-delete-open')).forEach(function (item) {
+          if (item !== activeItem) {
+            item.classList.remove('is-delete-open');
+          }
+        });
+
+        activeItem.classList.toggle('is-delete-open', diffX < 0);
+      }
+
+      activeItem = null;
+    }, { passive: true });
   }
 
   function setupBackButton() {
@@ -621,10 +917,12 @@
         if (!data.enabled || !data.publicKey) {
           pushServerConfigured = false;
           pushNotificationsEnabled = false;
+          pushErrorMessage = 'Server VAPID keys are missing.';
           return false;
         }
 
         pushServerConfigured = true;
+        pushErrorMessage = '';
         return navigator.serviceWorker.ready
           .then(function (registration) {
             return registration.pushManager.getSubscription()
@@ -640,11 +938,13 @@
           })
           .then(function () {
             pushNotificationsEnabled = true;
+            pushErrorMessage = '';
             return true;
           });
       })
-      .catch(function () {
+      .catch(function (err) {
         pushNotificationsEnabled = false;
+        pushErrorMessage = err?.message || 'Push subscription failed.';
         return false;
       });
   }
@@ -674,14 +974,14 @@
     if (Notification.permission === 'granted') {
       if (!pushServerConfigured) {
         notificationButton.textContent = 'Setup Push';
-        notificationButton.title = 'Server VAPID keys are missing, so closed-app notifications cannot start yet.';
+        notificationButton.title = pushErrorMessage || 'Server VAPID keys are missing, so closed-app notifications cannot start yet.';
         return;
       }
 
       notificationButton.textContent = pushNotificationsEnabled ? 'Test' : 'Enable Push';
       notificationButton.title = pushNotificationsEnabled
-        ? 'Send a test notification.'
-        : 'Enable background notifications for this installed web app.';
+        ? 'Send a real server push test notification.'
+        : (pushErrorMessage || 'Enable background notifications for this installed web app.');
       return;
     }
 
@@ -715,6 +1015,37 @@
       return;
     }
 
+    if (pushNotificationsEnabled) {
+      notificationButton.disabled = true;
+      notificationButton.textContent = 'Sending';
+
+      fetch('/api/push/test', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json'
+        }
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) {
+              throw new Error(data.error || 'Server push test failed.');
+            }
+
+            return data;
+          });
+        })
+        .then(function () {
+          updateNotificationButton();
+        })
+        .catch(function (err) {
+          pushNotificationsEnabled = false;
+          pushErrorMessage = err.message || 'Server push test failed.';
+          window.alert(pushErrorMessage);
+          updateNotificationButton();
+        });
+      return;
+    }
+
     displayNotification('SMS Sync notifications are on', {
       body: 'New SMS alerts will appear here.',
       icon: '/icons/icon-192.png',
@@ -733,8 +1064,13 @@
     }
 
     if (Notification.permission === 'granted') {
-      ensurePushSubscription().then(function () {
-        showTestNotification();
+      ensurePushSubscription().then(function (enabled) {
+        if (enabled) {
+          showTestNotification();
+        } else if (pushErrorMessage) {
+          window.alert(pushErrorMessage);
+        }
+
         updateNotificationButton();
       });
       return;
@@ -748,8 +1084,13 @@
 
     Notification.requestPermission().then(function (permission) {
       if (permission === 'granted') {
-        ensurePushSubscription().then(function () {
-          showTestNotification();
+        ensurePushSubscription().then(function (enabled) {
+          if (enabled) {
+            showTestNotification();
+          } else if (pushErrorMessage) {
+            window.alert(pushErrorMessage);
+          }
+
           updateNotificationButton();
         });
         return;
@@ -1037,6 +1378,14 @@
     }
   }
 
+  function setupRelativeTimeRefresh() {
+    window.setInterval(function () {
+      if (currentConversation) {
+        renderHeader(currentConversation);
+      }
+    }, 60000);
+  }
+
   window.addEventListener('load', function () {
     shell = document.querySelector('.messenger-shell');
     conversationPanel = document.querySelector('.conversation-panel');
@@ -1051,8 +1400,12 @@
     notificationButton = document.querySelector('[data-notification-button]');
     updateButton = document.querySelector('[data-update-button]');
     updateStatus = document.querySelector('[data-update-status]');
+    undoToast = document.querySelector('[data-undo-toast]');
+    undoMessage = document.querySelector('[data-undo-message]');
+    undoButton = document.querySelector('[data-undo-button]');
 
     registerServiceWorker();
+    lockPortraitOrientation();
 
     if (!shell || !thread || !header) {
       return;
@@ -1060,6 +1413,8 @@
 
     setupConversationLinks();
     setupBackButton();
+    setupConversationDeletes();
+    setupMessageDeletes();
     setupSettingsPanel();
     setupInfiniteScroll();
     setupPullToRefresh();
@@ -1068,5 +1423,10 @@
     setupMessageNotificationPolling();
     setupAppUpdateCheck();
     setupNotificationRefreshHandling();
+    setupRelativeTimeRefresh();
+
+    if (undoButton) {
+      undoButton.addEventListener('click', undoPendingDelete);
+    }
   });
 })();

@@ -23,6 +23,48 @@ const serializeSubscription = (subscription) => {
   };
 };
 
+const truncateBody = (value, maxLength = 180) => {
+  const body = String(value || '');
+
+  return body.length > maxLength ? `${body.slice(0, maxLength - 1)}...` : body;
+};
+
+const sendPayloadToDevice = async ({ deviceCode, payload }) => {
+  if (!pushConfig.enabled || !deviceCode) {
+    return {
+      sent: 0,
+      failed: 0,
+      configured: pushConfig.enabled
+    };
+  }
+
+  const subscriptions = await pushSubscriptionModel.findByDeviceCode(deviceCode);
+  let sent = 0;
+  let failed = 0;
+
+  await Promise.all(subscriptions.map(async (subscription) => {
+    try {
+      await pushConfig.webPush.sendNotification(serializeSubscription(subscription), JSON.stringify(payload));
+      sent += 1;
+    } catch (err) {
+      failed += 1;
+
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        await pushSubscriptionModel.deleteByEndpoint(subscription.endpoint);
+        return;
+      }
+
+      console.error('Failed to send push notification:', err);
+    }
+  }));
+
+  return {
+    sent,
+    failed,
+    configured: pushConfig.enabled
+  };
+};
+
 const getTitle = (messages) => {
   if (messages.length > 1) {
     return `${messages.length} new SMS messages`;
@@ -44,28 +86,29 @@ const notifyNewMessages = async ({ deviceCode, messages }) => {
   }
 
   const latest = incomingMessages[incomingMessages.length - 1];
-  const subscriptions = await pushSubscriptionModel.findByDeviceCode(deviceCode);
-  const payload = JSON.stringify({
+  const payload = {
     title: getTitle(incomingMessages),
-    body: latest.body,
+    body: truncateBody(latest.body),
     url: latest.address ? `/?address=${encodeURIComponent(latest.address)}&refresh=1` : '/?refresh=1',
     tag: latest.address || 'sms-sync-message'
-  });
+  };
 
-  await Promise.all(subscriptions.map(async (subscription) => {
-    try {
-      await pushConfig.webPush.sendNotification(serializeSubscription(subscription), payload);
-    } catch (err) {
-      if (err.statusCode === 404 || err.statusCode === 410) {
-        await pushSubscriptionModel.deleteByEndpoint(subscription.endpoint);
-        return;
-      }
+  await sendPayloadToDevice({ deviceCode, payload });
+};
 
-      console.error('Failed to send push notification:', err);
+const sendTestNotification = async (deviceCode) => {
+  return sendPayloadToDevice({
+    deviceCode,
+    payload: {
+      title: 'SMS Sync test notification',
+      body: 'Background push is configured for this browser.',
+      url: '/?refresh=1',
+      tag: 'sms-sync-test'
     }
-  }));
+  });
 };
 
 module.exports = {
-  notifyNewMessages
+  notifyNewMessages,
+  sendTestNotification
 };

@@ -111,19 +111,28 @@
         <% } else { %>
           <nav class="conversation-list">
             <% conversations.forEach((conversation) => { %>
-              <a
-                class="conversation-link"
-                href="/?address=<%= encodeURIComponent(conversation.address) %>"
-                data-address="<%= conversation.address %>"
-                data-display-name="<%= conversation.displayName %>"
-                data-contact-email="<%= conversation.contactEmail || '' %>">
-                <span class="avatar" aria-hidden="true"><%= conversation.displayName.slice(0, 1).toUpperCase() %></span>
-                <span class="conversation-copy">
-                  <strong><%= conversation.displayName %></strong>
-                  <em><%= conversation.contactEmail || conversation.address %></em>
-                  <small><%= conversation.latestMessage.body %></small>
-                </span>
-              </a>
+              <div class="conversation-item" data-address="<%= conversation.address %>">
+                <button class="conversation-delete-button" type="button" data-delete-conversation="<%= conversation.address %>">Delete</button>
+                <a
+                  class="conversation-link"
+                  href="/?address=<%= encodeURIComponent(conversation.address) %>"
+                  data-address="<%= conversation.address %>"
+                  data-display-name="<%= conversation.displayName %>"
+                  data-contact-email="<%= conversation.contactEmail || '' %>"
+                  data-latest-message-at="<%= new Date(conversation.latestMessage.messageAt).toISOString() %>">
+                  <span class="avatar" aria-hidden="true"><%= conversation.displayName.slice(0, 1).toUpperCase() %></span>
+                  <span class="conversation-copy">
+                    <strong><%= conversation.displayName %></strong>
+                    <% if ((conversation.contactEmail || conversation.address) !== conversation.displayName) { %>
+                      <em><%= conversation.contactEmail || conversation.address %></em>
+                    <% } %>
+                    <small><%= conversation.latestMessage.body %></small>
+                  </span>
+                  <% if (conversation.unreadCount > 0) { %>
+                    <span class="unread-badge" data-unread-badge><%= conversation.unreadCount > 99 ? '99+' : conversation.unreadCount %></span>
+                  <% } %>
+                </a>
+              </div>
             <% }) %>
           </nav>
         <% } %>
@@ -150,6 +159,10 @@
         </div>
       </section>
     </main>
+    <div class="undo-toast" data-undo-toast hidden>
+      <span data-undo-message>Deleted</span>
+      <button type="button" data-undo-button>Undo</button>
+    </div>
     <script src="/js/app.js?v=<%= encodeURIComponent(appVersion) %>" defer></script>
   </body>
 </html>
