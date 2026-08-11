@@ -1,5 +1,82 @@
 const { Prisma } = require('@prisma/client');
 const prisma = require('../config/prisma');
+const { normalizeConversationAddress } = require('../utils/phone');
+
+const senderColumnSql = (alias = 'm') => Prisma.raw(`${alias}.sender`);
+
+const compactAddressSql = (alias = 'm') => Prisma.sql`
+  REPLACE(
+    REPLACE(
+      REPLACE(
+        REPLACE(
+          REPLACE(TRIM(${senderColumnSql(alias)}), ' ', ''),
+          '-',
+          ''
+        ),
+        '(',
+        ''
+      ),
+      ')',
+      ''
+    ),
+    '.',
+    ''
+  )
+`;
+
+const digitsAddressSql = (alias = 'm') => Prisma.sql`
+  REPLACE(${compactAddressSql(alias)}, '+', '')
+`;
+
+const conversationAddressSql = (alias = 'm') => Prisma.sql`
+  CASE
+    WHEN ${compactAddressSql(alias)} LIKE '+92%' AND CHAR_LENGTH(${compactAddressSql(alias)}) > 3
+      THEN CONCAT('0', SUBSTRING(${compactAddressSql(alias)}, 4))
+    WHEN ${digitsAddressSql(alias)} LIKE '0092%' AND CHAR_LENGTH(${digitsAddressSql(alias)}) > 4
+      THEN CONCAT('0', SUBSTRING(${digitsAddressSql(alias)}, 5))
+    WHEN ${digitsAddressSql(alias)} LIKE '92%' AND CHAR_LENGTH(${digitsAddressSql(alias)}) >= 11
+      THEN CONCAT('0', SUBSTRING(${digitsAddressSql(alias)}, 3))
+    WHEN ${digitsAddressSql(alias)} LIKE '0%'
+      THEN ${digitsAddressSql(alias)}
+    ELSE LOWER(TRIM(${senderColumnSql(alias)}))
+  END
+`;
+
+const deviceWhereSql = (deviceCode, alias = 'm') => {
+  return deviceCode ? Prisma.sql`AND ${Prisma.raw(`${alias}.device_code`)} = ${deviceCode}` : Prisma.empty;
+};
+
+const hydrateMessage = (row) => {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    deviceMessageId: row.deviceMessageId,
+    deviceCode: row.deviceCode,
+    address: row.address,
+    contactName: row.contactName,
+    contactEmail: row.contactEmail,
+    direction: row.direction,
+    body: row.body,
+    messageAt: row.messageAt,
+    syncedAt: row.syncedAt
+  };
+};
+
+const selectMessageFieldsSql = (alias = 'm') => Prisma.sql`
+  ${Prisma.raw(`${alias}.id`)} AS id,
+  ${Prisma.raw(`${alias}.device_message_id`)} AS deviceMessageId,
+  ${Prisma.raw(`${alias}.device_code`)} AS deviceCode,
+  ${Prisma.raw(`${alias}.sender`)} AS address,
+  ${Prisma.raw(`${alias}.contact_name`)} AS contactName,
+  ${Prisma.raw(`${alias}.contact_email`)} AS contactEmail,
+  ${Prisma.raw(`${alias}.direction`)} AS direction,
+  ${Prisma.raw(`${alias}.body`)} AS body,
+  ${Prisma.raw(`${alias}.message_at`)} AS messageAt,
+  ${Prisma.raw(`${alias}.received_at`)} AS syncedAt
+`;
 
 const getUniqueMessageWhere = (message) => {
   if (!message.deviceCode || !message.deviceMessageId) {
@@ -88,24 +165,33 @@ const findUnreadCounts = async ({ deviceCode, sessionId }) => {
 
   const rows = await prisma.$queryRaw`
     SELECT
-      m.sender AS address,
+      grouped.conversationAddress AS address,
       COUNT(*) AS unreadCount
-    FROM messages m
+    FROM (
+      SELECT
+        m.device_code,
+        m.direction,
+        m.message_at,
+        ${conversationAddressSql('m')} AS conversationAddress
+      FROM messages m
+      WHERE m.device_code = ${deviceCode}
+    ) grouped
     LEFT JOIN web_read_states r
-      ON r.device_code = m.device_code
+      ON r.device_code = grouped.device_code
       AND r.session_id = ${sessionId}
-      AND r.address = m.sender
-    WHERE m.device_code = ${deviceCode}
-      AND m.direction = 'received'
-      AND (r.last_read_at IS NULL OR m.message_at > r.last_read_at)
-    GROUP BY m.sender
+      AND r.address = grouped.conversationAddress
+    WHERE grouped.direction = 'received'
+      AND (r.last_read_at IS NULL OR grouped.message_at > r.last_read_at)
+    GROUP BY grouped.conversationAddress
   `;
 
   return new Map(rows.map((row) => [row.address, Number(row.unreadCount)]));
 };
 
 const findLastReadAt = async ({ deviceCode, sessionId, address }) => {
-  if (!deviceCode || !sessionId || !address) {
+  const conversationAddress = normalizeConversationAddress(address);
+
+  if (!deviceCode || !sessionId || !conversationAddress) {
     return null;
   }
 
@@ -114,7 +200,7 @@ const findLastReadAt = async ({ deviceCode, sessionId, address }) => {
     FROM web_read_states
     WHERE device_code = ${deviceCode}
       AND session_id = ${sessionId}
-      AND address = ${address}
+      AND address = ${conversationAddress}
     LIMIT 1
   `;
 
@@ -122,16 +208,18 @@ const findLastReadAt = async ({ deviceCode, sessionId, address }) => {
 };
 
 const markConversationRead = async ({ deviceCode, sessionId, address }) => {
-  if (!deviceCode || !sessionId || !address) {
+  const conversationAddress = normalizeConversationAddress(address);
+
+  if (!deviceCode || !sessionId || !conversationAddress) {
     return;
   }
 
   await prisma.$executeRaw`
     INSERT INTO web_read_states (device_code, session_id, address, last_read_at)
-    SELECT ${deviceCode}, ${sessionId}, ${address}, COALESCE(MAX(message_at), CURRENT_TIMESTAMP(0))
-    FROM messages
-    WHERE device_code = ${deviceCode}
-      AND sender = ${address}
+    SELECT ${deviceCode}, ${sessionId}, ${conversationAddress}, COALESCE(MAX(m.message_at), CURRENT_TIMESTAMP(0))
+    FROM messages m
+    WHERE m.device_code = ${deviceCode}
+      AND ${conversationAddressSql('m')} = ${conversationAddress}
     ON DUPLICATE KEY UPDATE
       last_read_at = VALUES(last_read_at),
       updated_at = CURRENT_TIMESTAMP(0)
@@ -302,14 +390,22 @@ const deleteMessageById = async ({ id, deviceCode }) => {
   });
 };
 
-const deleteConversationByAddress = async ({ address, deviceCode }) => {
-  const where = {
-    address,
-    ...(deviceCode ? { deviceCode } : {})
-  };
+const deleteMessagesByIds = async ({ ids, deviceCode }) => {
+  const messageIds = Array.from(new Set((ids || []).map(parseMessageId).filter(Boolean)));
+
+  if (messageIds.length === 0) {
+    return { count: 0 };
+  }
+
   const messages = await prisma.message.findMany({
-    where,
+    where: {
+      id: {
+        in: messageIds
+      },
+      ...(deviceCode ? { deviceCode } : {})
+    },
     select: {
+      id: true,
       deviceCode: true,
       deviceMessageId: true,
       address: true
@@ -318,14 +414,47 @@ const deleteConversationByAddress = async ({ address, deviceCode }) => {
 
   await tombstoneMessages(messages);
 
+  if (messages.length === 0) {
+    return { count: 0 };
+  }
+
   return prisma.message.deleteMany({
-    where
+    where: {
+      id: {
+        in: messages.map((message) => message.id)
+      },
+      ...(deviceCode ? { deviceCode } : {})
+    }
   });
+};
+
+const deleteConversationByAddress = async ({ address, deviceCode }) => {
+  const conversationAddress = normalizeConversationAddress(address);
+
+  const messages = await prisma.$queryRaw`
+    SELECT
+      m.device_code AS deviceCode,
+      m.device_message_id AS deviceMessageId,
+      m.sender AS address
+    FROM messages m
+    WHERE ${conversationAddressSql('m')} = ${conversationAddress}
+      ${deviceWhereSql(deviceCode, 'm')}
+  `;
+
+  await tombstoneMessages(messages);
+
+  const count = await prisma.$executeRaw`
+    DELETE m FROM messages m
+    WHERE ${conversationAddressSql('m')} = ${conversationAddress}
+      ${deviceWhereSql(deviceCode, 'm')}
+  `;
+
+  return { count };
 };
 
 const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
   const where = deviceCode ? { deviceCode } : {};
-  const [totalMessages, lastSync, groupedConversations, groupedDirections] = await Promise.all([
+  const [totalMessages, lastSync, groupedConversations] = await Promise.all([
     prisma.message.count({ where }),
     prisma.message.aggregate({
       where,
@@ -333,52 +462,38 @@ const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
         syncedAt: true
       }
     }),
-    prisma.message.groupBy({
-      by: ['address'],
-      where,
-      _count: {
-        _all: true
-      },
-      _max: {
-        messageAt: true
-      }
-    }),
-    prisma.message.groupBy({
-      by: ['address', 'direction'],
-      where,
-      _count: {
-        _all: true
-      }
-    })
+    prisma.$queryRaw`
+      SELECT
+        grouped.conversationAddress AS address,
+        COUNT(*) AS messageCount,
+        SUM(CASE WHEN grouped.direction = 'sent' THEN 1 ELSE 0 END) AS sentCount,
+        SUM(CASE WHEN grouped.direction = 'sent' THEN 0 ELSE 1 END) AS receivedCount,
+        MAX(grouped.message_at) AS latestMessageAt
+      FROM (
+        SELECT
+          m.direction,
+          m.message_at,
+          ${conversationAddressSql('m')} AS conversationAddress
+        FROM messages m
+        WHERE 1 = 1
+          ${deviceWhereSql(deviceCode, 'm')}
+      ) grouped
+      GROUP BY grouped.conversationAddress
+    `
   ]);
 
-  const directionCounts = new Map();
   const unreadCounts = await findUnreadCounts({ deviceCode, sessionId });
 
-  for (const item of groupedDirections) {
-    const counts = directionCounts.get(item.address) || { sent: 0, received: 0 };
-
-    if (item.direction === 'sent') {
-      counts.sent = item._count._all;
-    } else {
-      counts.received += item._count._all;
-    }
-
-    directionCounts.set(item.address, counts);
-  }
-
   const conversations = await Promise.all(groupedConversations.map(async (conversation) => {
-    const latestMessage = await prisma.message.findFirst({
-      where: {
-        address: conversation.address,
-        ...(deviceCode ? { deviceCode } : {})
-      },
-      orderBy: [
-        { messageAt: 'desc' },
-        { id: 'desc' }
-      ]
-    });
-    const counts = directionCounts.get(conversation.address) || { sent: 0, received: 0 };
+    const latestRows = await prisma.$queryRaw`
+      SELECT ${selectMessageFieldsSql('m')}
+      FROM messages m
+      WHERE ${conversationAddressSql('m')} = ${conversation.address}
+        ${deviceWhereSql(deviceCode, 'm')}
+      ORDER BY m.message_at DESC, m.id DESC
+      LIMIT 1
+    `;
+    const latestMessage = hydrateMessage(latestRows[0]);
 
     return {
       address: conversation.address,
@@ -386,9 +501,9 @@ const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
       contactEmail: latestMessage?.contactEmail || null,
       latestMessage,
       unreadCount: unreadCounts.get(conversation.address) || 0,
-      messageCount: conversation._count._all,
-      sentCount: counts.sent,
-      receivedCount: counts.received
+      messageCount: Number(conversation.messageCount),
+      sentCount: Number(conversation.sentCount),
+      receivedCount: Number(conversation.receivedCount)
     };
   }));
 
@@ -405,48 +520,42 @@ const findConversationSummaries = async ({ deviceCode, sessionId } = {}) => {
 
 const findMessagesByAddress = async ({ address, deviceCode, sessionId, limit = 100, beforeMessageAt, beforeId }) => {
   const take = Math.min(Math.max(Number(limit) || 100, 1), 100);
-  const where = {
-    address,
-    ...(deviceCode ? { deviceCode } : {})
-  };
+  const conversationAddress = normalizeConversationAddress(address);
+  let cursorSql = Prisma.empty;
 
   if (beforeMessageAt && beforeId) {
     const beforeDate = new Date(beforeMessageAt);
 
     if (!Number.isNaN(beforeDate.getTime())) {
       try {
-        where.OR = [
-          {
-            messageAt: {
-              lt: beforeDate
-            }
-          },
-          {
-            messageAt: beforeDate,
-            id: {
-              lt: BigInt(beforeId)
-            }
-          }
-        ];
+        const beforeBigIntId = BigInt(beforeId);
+
+        cursorSql = Prisma.sql`
+          AND (
+            m.message_at < ${beforeDate}
+            OR (m.message_at = ${beforeDate} AND m.id < ${beforeBigIntId})
+          )
+        `;
       } catch (err) {
-        delete where.OR;
+        cursorSql = Prisma.empty;
       }
     }
   }
 
-  const rows = await prisma.message.findMany({
-    where,
-    orderBy: [
-      { messageAt: 'desc' },
-      { id: 'desc' }
-    ],
-    take: take + 1
-  });
+  const rows = await prisma.$queryRaw`
+    SELECT ${selectMessageFieldsSql('m')}
+    FROM messages m
+    WHERE ${conversationAddressSql('m')} = ${conversationAddress}
+      ${deviceWhereSql(deviceCode, 'm')}
+      ${cursorSql}
+    ORDER BY m.message_at DESC, m.id DESC
+    LIMIT ${take + 1}
+  `;
   const hasMore = rows.length > take;
   const pageRows = rows.slice(0, take);
-  const messages = pageRows.reverse();
+  const messages = pageRows.map(hydrateMessage).reverse();
   const oldest = pageRows[pageRows.length - 1] || null;
-  const lastReadAt = await findLastReadAt({ deviceCode, sessionId, address });
+  const lastReadAt = await findLastReadAt({ deviceCode, sessionId, address: conversationAddress });
   const firstUnreadMessage = messages.find((message) => {
     return message.direction === 'received' && (!lastReadAt || message.messageAt > lastReadAt);
   });
@@ -505,6 +614,7 @@ module.exports = {
   createMessage,
   createMessages,
   deleteMessageById,
+  deleteMessagesByIds,
   deleteConversationByAddress,
   markConversationRead,
   findConversationSummaries,

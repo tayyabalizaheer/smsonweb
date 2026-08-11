@@ -140,14 +140,28 @@
 
       <section class="thread-panel" aria-label="Selected conversation">
         <header class="thread-header is-empty">
-          <a class="thread-back" href="/" aria-label="Back to contacts">
-            <span aria-hidden="true">&larr;</span>
-            <strong>Back</strong>
-          </a>
-          <span class="avatar large" aria-hidden="true">#</span>
-          <div>
-            <h2>Select a contact</h2>
-            <p>Choose a conversation to load the latest messages.</p>
+          <div class="thread-contact-bar">
+            <a class="thread-back" href="/" aria-label="Back to contacts">
+              <span aria-hidden="true">&larr;</span>
+            </a>
+            <span class="avatar large" aria-hidden="true">#</span>
+            <div class="thread-title">
+              <h2>Select a contact</h2>
+              <p>Choose a conversation to load the latest messages.</p>
+            </div>
+          </div>
+          <div class="thread-selection-bar" hidden>
+            <button class="thread-action-button" type="button" aria-label="Cancel selection" data-selection-cancel>
+              <span aria-hidden="true">&times;</span>
+            </button>
+            <strong data-selection-count>0 selected</strong>
+            <span class="thread-selection-spacer"></span>
+            <button class="thread-action-button is-text" type="button" data-selection-copy>
+              Copy
+            </button>
+            <button class="thread-action-button is-text is-danger" type="button" data-selection-delete>
+              Delete
+            </button>
           </div>
         </header>
 

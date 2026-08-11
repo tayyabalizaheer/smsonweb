@@ -87,12 +87,12 @@ self.addEventListener('push', (event) => {
     payload = event.data ? event.data.json() : {};
   } catch (err) {
     payload = {
-      title: 'New SMS message',
+      title: 'SMS Sync',
       body: event.data ? event.data.text() : ''
     };
   }
 
-  const title = payload.title || 'New SMS message';
+  const title = payload.title || 'SMS Sync';
   const url = payload.url || '/?refresh=1';
 
   event.waitUntil(

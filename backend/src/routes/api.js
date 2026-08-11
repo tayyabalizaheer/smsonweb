@@ -22,6 +22,7 @@ router.post('/push/test', deviceController.requireWebDevice, pushController.test
 router.get('/conversations', deviceController.requireWebDevice, smsController.listConversations);
 router.delete('/conversations', deviceController.requireWebDevice, smsController.deleteConversation);
 router.get('/messages', deviceController.requireWebDevice, smsController.listMessages);
+router.delete('/messages', deviceController.requireWebDevice, smsController.deleteMessages);
 router.delete('/messages/:id', deviceController.requireWebDevice, smsController.deleteMessage);
 router.get('/messages/notifications', deviceController.requireWebDevice, smsController.listMessageNotifications);
 

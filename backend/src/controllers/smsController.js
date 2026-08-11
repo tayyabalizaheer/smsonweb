@@ -1,6 +1,7 @@
 const messageModel = require('../models/messageModel');
 const pushNotificationService = require('../services/pushNotificationService');
 const { getSessionId } = require('./deviceController');
+const { normalizeConversationAddress } = require('../utils/phone');
 
 const MAX_ADDRESS_LENGTH = 64;
 const MAX_BODY_LENGTH = 65535;
@@ -13,6 +14,7 @@ const serializeMessage = (message) => {
   return {
     id: message.id.toString(),
     address: message.address,
+    conversationAddress: normalizeConversationAddress(message.address),
     contactName: message.contactName,
     contactEmail: message.contactEmail,
     direction: message.direction,
@@ -297,6 +299,32 @@ const deleteMessage = async (req, res, next) => {
   }
 };
 
+const deleteMessages = async (req, res, next) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+
+  if (ids.length === 0) {
+    return res.status(400).json({ error: 'ids must contain at least one message id.' });
+  }
+
+  if (ids.length > 100) {
+    return res.status(400).json({ error: 'ids cannot contain more than 100 message ids.' });
+  }
+
+  try {
+    const result = await messageModel.deleteMessagesByIds({
+      ids,
+      deviceCode: req.device.code
+    });
+
+    return res.json({
+      deleted: result.count
+    });
+  } catch (err) {
+    console.error('Failed to delete messages:', err);
+    return next(err);
+  }
+};
+
 const deleteConversation = async (req, res, next) => {
   const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
 
@@ -327,5 +355,6 @@ module.exports = {
   listMessages,
   listMessageNotifications,
   deleteMessage,
+  deleteMessages,
   deleteConversation
 };

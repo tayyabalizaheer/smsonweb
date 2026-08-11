@@ -1,5 +1,6 @@
 const pushConfig = require('../config/webPush');
 const pushSubscriptionModel = require('../models/pushSubscriptionModel');
+const { normalizeConversationAddress } = require('../utils/phone');
 
 const RECENT_MESSAGE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -66,12 +67,9 @@ const sendPayloadToDevice = async ({ deviceCode, payload }) => {
 };
 
 const getTitle = (messages) => {
-  if (messages.length > 1) {
-    return `${messages.length} new SMS messages`;
-  }
+  const message = messages[messages.length - 1] || {};
 
-  const message = messages[0];
-  return `New SMS from ${message.contactName || message.address || 'Unknown'}`;
+  return message.contactName || message.address || 'Unknown';
 };
 
 const notifyNewMessages = async ({ deviceCode, messages }) => {
@@ -86,11 +84,12 @@ const notifyNewMessages = async ({ deviceCode, messages }) => {
   }
 
   const latest = incomingMessages[incomingMessages.length - 1];
+  const conversationAddress = normalizeConversationAddress(latest.address);
   const payload = {
     title: getTitle(incomingMessages),
     body: truncateBody(latest.body),
-    url: latest.address ? `/?address=${encodeURIComponent(latest.address)}&refresh=1` : '/?refresh=1',
-    tag: latest.address || 'sms-sync-message'
+    url: conversationAddress ? `/?address=${encodeURIComponent(conversationAddress)}&refresh=1` : '/?refresh=1',
+    tag: conversationAddress || latest.address || 'sms-sync-message'
   };
 
   await sendPayloadToDevice({ deviceCode, payload });
