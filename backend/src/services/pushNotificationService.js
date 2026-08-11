@@ -2,16 +2,8 @@ const pushConfig = require('../config/webPush');
 const pushSubscriptionModel = require('../models/pushSubscriptionModel');
 const { normalizeConversationAddress } = require('../utils/phone');
 
-const RECENT_MESSAGE_WINDOW_MS = 15 * 60 * 1000;
-
-const isRecentIncomingMessage = (message) => {
-  if (!message || message.direction === 'sent') {
-    return false;
-  }
-
-  const messageAt = new Date(message.messageAt).getTime();
-
-  return Number.isFinite(messageAt) && Date.now() - messageAt <= RECENT_MESSAGE_WINDOW_MS;
+const isIncomingMessage = (message) => {
+  return Boolean(message && message.direction !== 'sent');
 };
 
 const serializeSubscription = (subscription) => {
@@ -45,7 +37,10 @@ const sendPayloadToDevice = async ({ deviceCode, payload }) => {
 
   await Promise.all(subscriptions.map(async (subscription) => {
     try {
-      await pushConfig.webPush.sendNotification(serializeSubscription(subscription), JSON.stringify(payload));
+      await pushConfig.webPush.sendNotification(serializeSubscription(subscription), JSON.stringify(payload), {
+        TTL: 60 * 60 * 24,
+        urgency: 'high'
+      });
       sent += 1;
     } catch (err) {
       failed += 1;
@@ -77,7 +72,7 @@ const notifyNewMessages = async ({ deviceCode, messages }) => {
     return;
   }
 
-  const incomingMessages = messages.filter(isRecentIncomingMessage);
+  const incomingMessages = messages.filter(isIncomingMessage);
 
   if (incomingMessages.length === 0) {
     return;

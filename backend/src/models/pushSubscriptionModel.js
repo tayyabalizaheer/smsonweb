@@ -30,6 +30,16 @@ const findByDeviceCode = async (deviceCode) => {
   `;
 };
 
+const countByDeviceCode = async (deviceCode) => {
+  const rows = await prisma.$queryRaw`
+    SELECT COUNT(*) AS subscriptionCount
+    FROM push_subscriptions
+    WHERE device_code = ${deviceCode}
+  `;
+
+  return Number(rows[0]?.subscriptionCount || 0);
+};
+
 const deleteByEndpoint = async (endpoint) => {
   return prisma.$executeRaw`
     DELETE FROM push_subscriptions
@@ -40,5 +50,6 @@ const deleteByEndpoint = async (endpoint) => {
 module.exports = {
   upsertSubscription,
   findByDeviceCode,
+  countByDeviceCode,
   deleteByEndpoint
 };

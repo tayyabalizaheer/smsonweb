@@ -10,6 +10,22 @@ const getPublicKey = (req, res) => {
   });
 };
 
+const status = async (req, res, next) => {
+  try {
+    const subscriptionCount = await pushSubscriptionModel.countByDeviceCode(req.device.code);
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      configured: pushConfig.enabled,
+      subscriptionCount,
+      subscribed: subscriptionCount > 0
+    });
+  } catch (err) {
+    console.error('Failed to load push status:', err);
+    return next(err);
+  }
+};
+
 const subscribe = async (req, res, next) => {
   const subscription = req.body?.subscription || req.body || {};
   const endpoint = typeof subscription.endpoint === 'string' ? subscription.endpoint.trim() : '';
@@ -81,6 +97,7 @@ const test = async (req, res, next) => {
 
 module.exports = {
   getPublicKey,
+  status,
   subscribe,
   unsubscribe,
   test

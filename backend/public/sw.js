@@ -14,6 +14,56 @@ const STATIC_ASSETS = [
   '/icons/apple-touch-icon.png'
 ];
 
+const urlBase64ToUint8Array = (value) => {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = self.atob(base64);
+  const output = new Uint8Array(rawData.length);
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    output[index] = rawData.charCodeAt(index);
+  }
+
+  return output;
+};
+
+const repairPushSubscription = async () => {
+  const keyResponse = await fetch('/api/push/public-key?ts=' + Date.now(), {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  if (!keyResponse.ok) {
+    return;
+  }
+
+  const keyData = await keyResponse.json();
+
+  if (!keyData.enabled || !keyData.publicKey) {
+    return;
+  }
+
+  const subscription = await self.registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+  });
+
+  await fetch('/api/push/subscribe', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      subscription: subscription.toJSON()
+    })
+  });
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
@@ -78,6 +128,10 @@ self.addEventListener('fetch', (event) => {
       });
     })
   );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(repairPushSubscription());
 });
 
 self.addEventListener('push', (event) => {

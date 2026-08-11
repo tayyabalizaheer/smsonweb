@@ -126,6 +126,31 @@
     return output;
   }
 
+  function arraysEqual(left, right) {
+    if (!left || !right || left.length !== right.length) {
+      return false;
+    }
+
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function subscriptionUsesPublicKey(subscription, publicKey) {
+    if (!subscription || !subscription.options?.applicationServerKey) {
+      return false;
+    }
+
+    return arraysEqual(
+      new Uint8Array(subscription.options.applicationServerKey),
+      urlBase64ToUint8Array(publicKey)
+    );
+  }
+
   function escapeHtml(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -1185,6 +1210,21 @@
     });
   }
 
+  function fetchPushStatus() {
+    return fetch('/api/push/status?ts=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json'
+      }
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('Push status request failed');
+      }
+
+      return response.json();
+    });
+  }
+
   function ensurePushSubscription() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       pushNotificationsEnabled = false;
@@ -1204,7 +1244,23 @@
         pushErrorMessage = '';
         return navigator.serviceWorker.ready
           .then(function (registration) {
+            return registration.update().then(function () {
+              return registration;
+            }).catch(function () {
+              return registration;
+            });
+          })
+          .then(function (registration) {
             return registration.pushManager.getSubscription()
+              .then(function (subscription) {
+                if (subscription && !subscriptionUsesPublicKey(subscription, data.publicKey)) {
+                  return subscription.unsubscribe().then(function () {
+                    return null;
+                  });
+                }
+
+                return subscription;
+              })
               .then(function (subscription) {
                 return subscription || registration.pushManager.subscribe({
                   userVisibleOnly: true,
@@ -1215,7 +1271,12 @@
           .then(function (subscription) {
             return savePushSubscription(subscription);
           })
-          .then(function () {
+          .then(fetchPushStatus)
+          .then(function (status) {
+            if (!status.subscribed) {
+              throw new Error('Browser push permission is enabled, but the server has no saved subscription.');
+            }
+
             pushNotificationsEnabled = true;
             pushErrorMessage = '';
             return true;

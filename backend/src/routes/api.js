@@ -16,6 +16,7 @@ router.get('/devices/sessions', deviceController.listSessions);
 router.post('/devices/sessions/unpair', deviceController.unpairSessionSlot);
 router.get('/device/status', deviceController.requireWebDevice, deviceController.webDeviceStatus);
 router.get('/push/public-key', deviceController.requireWebDevice, pushController.getPublicKey);
+router.get('/push/status', deviceController.requireWebDevice, pushController.status);
 router.post('/push/subscribe', deviceController.requireWebDevice, pushController.subscribe);
 router.post('/push/unsubscribe', deviceController.requireWebDevice, pushController.unsubscribe);
 router.post('/push/test', deviceController.requireWebDevice, pushController.test);
