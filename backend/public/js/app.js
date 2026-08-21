@@ -1402,7 +1402,7 @@
     displayNotification('SMS Sync notifications are on', {
       body: 'New SMS alerts will appear here.',
       icon: '/icons/icon-192.png',
-      badge: '/icons/maskable-512.png',
+      badge: '/icons/badge-96.png',
       tag: 'sms-sync-test',
       renotify: true,
       data: {
@@ -1470,7 +1470,7 @@
     var options = {
       body: body,
       icon: '/icons/icon-192.png',
-      badge: '/icons/maskable-512.png',
+      badge: '/icons/badge-96.png',
       tag: conversationAddress || latest.address || 'sms-sync-message',
       renotify: true,
       data: {

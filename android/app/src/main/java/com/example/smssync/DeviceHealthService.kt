@@ -98,7 +98,8 @@ class DeviceHealthService : Service() {
         }
 
         return builder
-            .setSmallIcon(R.drawable.ic_sms_sync)
+            .setSmallIcon(R.drawable.ic_sms_sync_notification)
+            .setColor(getColor(R.color.primary))
             .setContentTitle(getString(R.string.health_notification_title))
             .setContentText(getString(R.string.health_notification_text))
             .setOngoing(true)

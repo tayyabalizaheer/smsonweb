@@ -153,7 +153,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(title, {
       body: payload.body || 'Open SMS Sync to view the latest messages.',
       icon: '/icons/icon-192.png',
-      badge: '/icons/maskable-512.png',
+      badge: '/icons/badge-96.png',
       tag: payload.tag || 'sms-sync-message',
       renotify: true,
       data: {
